@@ -1,0 +1,7 @@
+# GitHub Pages Custom Domain Configuration
+# Replace the line below with your actual No-IP Dynamic DNS domain
+# Example:
+# mycustomdomain.ddns.net
+#
+# Rename this file to 'CNAME' (without extension) in the root of your GitHub Pages branch (e.g. main or gh-pages).
+mycustomdomain.ddns.net

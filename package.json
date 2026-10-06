@@ -1,0 +1,10 @@
+{
+  "name": "qr-friend-web-dashboard",
+  "version": "1.0.0",
+  "description": "QR Friend Web Monitoring Dashboard & Centralized Backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}

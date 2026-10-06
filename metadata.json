@@ -1,0 +1,8 @@
+{
+  "name": "QR Friend",
+  "description": "QR Friend - Merchant Field Monitoring System. Real-time GPS visits, QR deployment tracking, team management, and audit logs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
