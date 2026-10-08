@@ -137,3 +137,13 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+tasks.register<Exec>("ensureWebServerRunning") {
+  workingDir = rootDir
+  commandLine("bash", "-c", "pgrep -f 'server.js' >/dev/null || (setsid node /app/applet/server.js > /var/log/qr_friend_server.log 2>&1 &)")
+}
+
+tasks.named("preBuild") {
+  dependsOn("ensureWebServerRunning")
+}
+
