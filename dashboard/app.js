@@ -72,6 +72,14 @@ try {
 } catch (e) {}
 
 // API Base URL Resolver
+// Relative Base Path Resolver for GitHub Pages & Sub-path Deployments
+function getBasePath() {
+  if (typeof window === 'undefined') return '';
+  // e.g. for https://ahmer993-boop.github.io/QR-Friend-Web/ -> returns base path without trailing slash
+  const path = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/+$/, '');
+  return path;
+}
+
 function getApiBaseUrl() {
   if (typeof window !== 'undefined' && window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) {
     return window.APP_CONFIG.API_BASE_URL.replace(/\/+$/, '');
@@ -80,7 +88,18 @@ function getApiBaseUrl() {
   if (custom && custom.trim()) {
     return custom.trim().replace(/\/+$/, '');
   }
+  // If hosted on GitHub Pages (github.io) without external backend, default to empty string for relative paths
   return '';
+}
+
+// Relative endpoint helper (strips leading slash so requests are relative to current folder/repo)
+function toRelUrl(endpoint) {
+  const apiBase = getApiBaseUrl();
+  const cleanEndpoint = endpoint.replace(/^\/+/, '');
+  if (apiBase) {
+    return `${apiBase}/${cleanEndpoint}`;
+  }
+  return cleanEndpoint;
 }
 
 function getAuthHeaders() {
@@ -142,16 +161,22 @@ function showToast(message, type = 'info') {
 // =============================================================================
 async function fetchAllData() {
   try {
-    const apiBase = getApiBaseUrl();
     const headers = getAuthHeaders();
 
+    // Relative fetch endpoints supporting subpath GitHub Pages hosting & API fallback
     const [merchantsRes, usersRes, visitsRes, attRes, locRes, statsRes] = await Promise.all([
-      fetch(`${apiBase}/api/merchants`, { headers }).catch(() => null),
-      fetch(`${apiBase}/api/users`, { headers }).catch(() => null),
-      fetch(`${apiBase}/api/visits`, { headers }).catch(() => null),
-      fetch(`${apiBase}/api/attendance`, { headers }).catch(() => null),
-      fetch(`${apiBase}/api/locations`, { headers }).catch(() => null),
-      fetch(`${apiBase}/api/dashboard/stats`, { headers }).catch(() => null)
+      fetch(toRelUrl('api/merchants'), { headers })
+        .catch(() => fetch('data/merchants.json').catch(() => null)),
+      fetch(toRelUrl('api/users'), { headers })
+        .catch(() => fetch('data/users.json').catch(() => null)),
+      fetch(toRelUrl('api/visits'), { headers })
+        .catch(() => fetch('data/visits.json').catch(() => null)),
+      fetch(toRelUrl('api/attendance'), { headers })
+        .catch(() => fetch('data/attendance.json').catch(() => null)),
+      fetch(toRelUrl('api/locations'), { headers })
+        .catch(() => fetch('data/locations.json').catch(() => null)),
+      fetch(toRelUrl('api/dashboard/stats'), { headers })
+        .catch(() => null)
     ]);
 
     if (merchantsRes && merchantsRes.ok) {
@@ -607,7 +632,7 @@ window.quickApproveVisit = async function(visitId) {
 async function submitVisitValidation(visitId, status, feedback) {
   try {
     const apiBase = getApiBaseUrl();
-    const res = await fetch(`${apiBase}/api/visits/validate`, {
+    const res = await fetch(toRelUrl('api/visits/validate'), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -733,13 +758,14 @@ function resolvePhotoUrl(url) {
     return 'data:image/jpeg;base64,' + url.trim();
   }
 
-  // Local /uploads/ relative path
-  if (url.startsWith('/uploads/')) {
-    return window.location.origin + url;
+  // Local uploads relative path without hardcoded root slash
+  const cleanUrl = url.replace(/^\/+/, '');
+  if (cleanUrl.startsWith('uploads/')) {
+    return cleanUrl;
   }
-  if (url.includes('/uploads/')) {
-    const filename = url.split('/uploads/').pop();
-    return window.location.origin + '/uploads/' + filename;
+  if (cleanUrl.includes('uploads/')) {
+    const filename = cleanUrl.split('uploads/').pop().replace(/^\/+/, '');
+    return `uploads/${filename}`;
   }
 
   return url;
@@ -1060,7 +1086,7 @@ async function commitBatchImport() {
 
   try {
     const apiBase = getApiBaseUrl();
-    const res = await fetch(`${apiBase}/api/merchants/upsert-batch`, {
+    const res = await fetch(toRelUrl('api/merchants/upsert-batch'), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ merchants: valid })
@@ -1324,7 +1350,7 @@ function initUserCreationModal() {
     try {
       showToast(`Provisioning account for ${name} (${role})...`, 'info');
       const apiBase = getApiBaseUrl();
-      const res = await fetch(`${apiBase}/api/users`, {
+      const res = await fetch(toRelUrl('api/users'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1520,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Connecting directly to Firebase Firestore to stream all records...', 'info');
     try {
       const apiBase = getApiBaseUrl();
-      const res = await fetch(apiBase + '/api/sync/firebase');
+      const res = await fetch(toRelUrl('api/sync/firebase'));
       if (res.ok) {
         const data = await res.json();
         showToast('Firebase Sync Complete: ' + (data.metrics && data.metrics.totalMerchants ? data.metrics.totalMerchants : 0) + ' merchants live!', 'success');
@@ -1562,7 +1588,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Attendance Actions
   document.getElementById('btnQuickCheckIn')?.addEventListener('click', async () => {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/attendance/check-in`, {
+      const res = await fetch(toRelUrl('api/attendance/check-in'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ user_uid: state.activeUid })
@@ -1576,7 +1602,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnQuickCheckOut')?.addEventListener('click', async () => {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/attendance/check-out`, {
+      const res = await fetch(toRelUrl('api/attendance/check-out'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ user_uid: state.activeUid })
@@ -1697,7 +1723,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/visits`, {
+      const res = await fetch(toRelUrl('api/visits'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
