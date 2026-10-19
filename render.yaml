@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: qr-friend-web
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install --production
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000

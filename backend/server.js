@@ -46,7 +46,7 @@ const { syncAllFromFirebase } = require('./syncFirebase');
 const { extractUserContext, filterByRbac, canValidateVisit, ROLE_LEVELS } = require('./middleware/rbac');
 
 // Port: In AI Studio / Cloud Run, Nginx occupies 8080 and proxies traffic to localhost:3000
-const PORT = 3000;
+const PORT = (process.env.PORT && process.env.PORT !== "8080") ? process.env.PORT : 3000;
 const PROJECT_ID = 'qr-friend-c4eb1';
 
 // File Paths
