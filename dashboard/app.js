@@ -72,14 +72,7 @@ try {
 } catch (e) {}
 
 // API Base URL Resolver
-// Relative Base Path Resolver for GitHub Pages & Sub-path Deployments
-function getBasePath() {
-  if (typeof window === 'undefined') return '';
-  // e.g. for https://ahmer993-boop.github.io/QR-Friend-Web/ -> returns base path without trailing slash
-  const path = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/+$/, '');
-  return path;
-}
-
+// API Base URL Resolver
 function getApiBaseUrl() {
   if (typeof window !== 'undefined' && window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) {
     return window.APP_CONFIG.API_BASE_URL.replace(/\/+$/, '');
@@ -88,18 +81,18 @@ function getApiBaseUrl() {
   if (custom && custom.trim()) {
     return custom.trim().replace(/\/+$/, '');
   }
-  // If hosted on GitHub Pages (github.io) without external backend, default to empty string for relative paths
   return '';
 }
 
-// Relative endpoint helper (strips leading slash so requests are relative to current folder/repo)
-function toRelUrl(endpoint) {
+// Absolute Root Endpoint Resolver (prevents resolving to /dashboard/api/...)
+function toApiUrl(endpoint) {
   const apiBase = getApiBaseUrl();
   const cleanEndpoint = endpoint.replace(/^\/+/, '');
   if (apiBase) {
     return `${apiBase}/${cleanEndpoint}`;
   }
-  return cleanEndpoint;
+  // User Request: Always use absolute root path with leading slash
+  return `/${cleanEndpoint}`;
 }
 
 function getAuthHeaders() {
@@ -163,20 +156,14 @@ async function fetchAllData() {
   try {
     const headers = getAuthHeaders();
 
-    // Relative fetch endpoints supporting subpath GitHub Pages hosting & API fallback
+    // Absolute root API calls pointing directly to /api/...
     const [merchantsRes, usersRes, visitsRes, attRes, locRes, statsRes] = await Promise.all([
-      fetch(toRelUrl('api/merchants'), { headers })
-        .catch(() => fetch('data/merchants.json').catch(() => null)),
-      fetch(toRelUrl('api/users'), { headers })
-        .catch(() => fetch('data/users.json').catch(() => null)),
-      fetch(toRelUrl('api/visits'), { headers })
-        .catch(() => fetch('data/visits.json').catch(() => null)),
-      fetch(toRelUrl('api/attendance'), { headers })
-        .catch(() => fetch('data/attendance.json').catch(() => null)),
-      fetch(toRelUrl('api/locations'), { headers })
-        .catch(() => fetch('data/locations.json').catch(() => null)),
-      fetch(toRelUrl('api/dashboard/stats'), { headers })
-        .catch(() => null)
+      fetch(toApiUrl('/api/merchants'), { headers }).catch(() => null),
+      fetch(toApiUrl('/api/users'), { headers }).catch(() => null),
+      fetch(toApiUrl('/api/visits'), { headers }).catch(() => null),
+      fetch(toApiUrl('/api/attendance'), { headers }).catch(() => null),
+      fetch(toApiUrl('/api/locations'), { headers }).catch(() => null),
+      fetch(toApiUrl('/api/dashboard/stats'), { headers }).catch(() => null)
     ]);
 
     if (merchantsRes && merchantsRes.ok) {
@@ -632,7 +619,7 @@ window.quickApproveVisit = async function(visitId) {
 async function submitVisitValidation(visitId, status, feedback) {
   try {
     const apiBase = getApiBaseUrl();
-    const res = await fetch(toRelUrl('api/visits/validate'), {
+    const res = await fetch(toApiUrl('/api/visits/validate'), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -1086,7 +1073,7 @@ async function commitBatchImport() {
 
   try {
     const apiBase = getApiBaseUrl();
-    const res = await fetch(toRelUrl('api/merchants/upsert-batch'), {
+    const res = await fetch(toApiUrl('/api/merchants/upsert-batch'), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ merchants: valid })
@@ -1350,7 +1337,7 @@ function initUserCreationModal() {
     try {
       showToast(`Provisioning account for ${name} (${role})...`, 'info');
       const apiBase = getApiBaseUrl();
-      const res = await fetch(toRelUrl('api/users'), {
+      const res = await fetch(toApiUrl('/api/users'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1405,7 +1392,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.classList.remove('hidden');
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/master/details`, {
+      const res = await fetch(toApiUrl('/api/master/details'), {
         headers: getRbacHeaders()
       });
       if (res.ok) {
@@ -1546,7 +1533,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Connecting directly to Firebase Firestore to stream all records...', 'info');
     try {
       const apiBase = getApiBaseUrl();
-      const res = await fetch(toRelUrl('api/sync/firebase'));
+      const res = await fetch(toApiUrl('/api/sync/firebase'));
       if (res.ok) {
         const data = await res.json();
         showToast('Firebase Sync Complete: ' + (data.metrics && data.metrics.totalMerchants ? data.metrics.totalMerchants : 0) + ' merchants live!', 'success');
@@ -1588,7 +1575,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Attendance Actions
   document.getElementById('btnQuickCheckIn')?.addEventListener('click', async () => {
     try {
-      const res = await fetch(toRelUrl('api/attendance/check-in'), {
+      const res = await fetch(toApiUrl('/api/attendance/check-in'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ user_uid: state.activeUid })
@@ -1602,7 +1589,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnQuickCheckOut')?.addEventListener('click', async () => {
     try {
-      const res = await fetch(toRelUrl('api/attendance/check-out'), {
+      const res = await fetch(toApiUrl('/api/attendance/check-out'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ user_uid: state.activeUid })
@@ -1723,7 +1710,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      const res = await fetch(toRelUrl('api/visits'), {
+      const res = await fetch(toApiUrl('/api/visits'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
@@ -1846,7 +1833,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/merchants/upsert-batch`, {
+      const res = await fetch(toApiUrl('/api/merchants/upsert-batch'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ merchants: [payload] })
@@ -1871,7 +1858,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/users`, {
+      const res = await fetch(toApiUrl('/api/users'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
