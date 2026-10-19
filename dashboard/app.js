@@ -650,19 +650,97 @@ function renderAttendanceTable() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Actual BDO Logins strictly registered for TODAY
-  const records = (state.rawAttendance || []).filter(r => {
+  // User Requirement: Fetch login from visits conducted today.
+  // First visit of the day on a BDO account is considered login Time.
+  const bdoVisitsToday = new Map();
+  (state.rawVisits || []).forEach(v => {
+    if (!v) return;
+    let vDate = v.visitDateString || '';
+    const ts = Number(v.timestamp || v.created_at || 0);
+    if (!vDate && ts > 0) {
+      try { vDate = new Date(ts).toISOString().split('T')[0]; } catch(e) {}
+    }
+    if (vDate !== todayStr) return;
+
+    const bdoKey = (v.bdo_uid || v.bdoId || v.user_uid || v.bdo_name || '').toLowerCase().trim();
+    if (!bdoKey) return;
+
+    if (!bdoVisitsToday.has(bdoKey)) bdoVisitsToday.set(bdoKey, []);
+    bdoVisitsToday.get(bdoKey).push({ ...v, ts });
+  });
+
+  const attendanceMap = new Map();
+
+  // Ingest existing attendance records for today
+  (state.rawAttendance || []).forEach(r => {
     if (isDemoAccount(r)) return false;
     const role = (r.role || '').toUpperCase();
     const isBdo = role === 'BDO' || role === 'OFFICER' || (!role && (r.user_uid || '').toLowerCase().startsWith('bdo_'));
-    if (!isBdo) return false;
+    if (!isBdo) return;
 
     let rDate = r.date || '';
     if (!rDate && r.login_time) {
       try { rDate = new Date(r.login_time).toISOString().split('T')[0]; } catch(e) {}
     }
-    return rDate === todayStr;
+    if (rDate === todayStr) {
+      attendanceMap.set((r.user_uid || '').toLowerCase().trim(), { ...r });
+    }
   });
+
+  // Synthesize or update attendance from today's visits (First visit = Login Time)
+  bdoVisitsToday.forEach((visitsList, bdoKey) => {
+    visitsList.sort((a, b) => a.ts - b.ts);
+    const firstVisit = visitsList[0];
+    const lastVisit = visitsList[visitsList.length - 1];
+
+    const uDoc = (state.rawUsers || []).find(u => 
+      (u.uid || '').toLowerCase() === bdoKey || (u.name || '').toLowerCase() === bdoKey
+    );
+
+    const bdoName = firstVisit.bdo_name || (uDoc ? uDoc.name : bdoKey);
+    const bdoCode = firstVisit.bdoCode || firstVisit.userCode || (uDoc ? (uDoc.employee_id || uDoc.employeeId) : bdoKey);
+    const loginTimeIso = firstVisit.ts > 0 ? new Date(firstVisit.ts).toISOString() : new Date().toISOString();
+    const lastPingIso = lastVisit.ts > 0 ? new Date(lastVisit.ts).toISOString() : loginTimeIso;
+
+    const existingAtt = attendanceMap.get(bdoKey);
+    if (existingAtt) {
+      if (firstVisit.ts > 0) {
+        const attLoginTs = new Date(existingAtt.login_time || Date.now()).getTime();
+        if (firstVisit.ts < attLoginTs || !existingAtt.login_time) {
+          existingAtt.login_time = loginTimeIso;
+        }
+      }
+      existingAtt.visits_conducted = Math.max(Number(existingAtt.visits_conducted || 0), visitsList.length);
+      existingAtt.last_ping = lastPingIso;
+      existingAtt.active_status = 'ONLINE';
+      if (existingAtt.login_time) {
+        const workingHours = (Date.now() - new Date(existingAtt.login_time).getTime()) / 3600000;
+        existingAtt.total_working_hours = Number(Math.max(0.1, workingHours).toFixed(1));
+      }
+      attendanceMap.set(bdoKey, existingAtt);
+    } else {
+      const workingHours = firstVisit.ts > 0 ? (Date.now() - firstVisit.ts) / 3600000 : 0.1;
+      const derivedRecord = {
+        id: `att_${bdoKey}_${todayStr}`,
+        user_uid: uDoc ? uDoc.uid : bdoKey,
+        user_name: bdoName,
+        bdoCode: bdoCode,
+        role: uDoc ? (uDoc.role || 'BDO') : 'BDO',
+        team_id: firstVisit.team_id || (uDoc ? uDoc.team_id : 'Team Alpha'),
+        area_id: firstVisit.area_id || (uDoc ? uDoc.area_id : 'area_north'),
+        date: todayStr,
+        login_time: loginTimeIso, // First conducted visit of the day is Login Time
+        logout_time: null,
+        total_working_hours: Number(Math.max(0.1, workingHours).toFixed(1)),
+        active_status: 'ONLINE',
+        visits_conducted: visitsList.length,
+        last_ping: lastPingIso
+      };
+      attendanceMap.set(bdoKey, derivedRecord);
+    }
+  });
+
+  const records = Array.from(attendanceMap.values());
 
   const totalStaff = records.length;
   const onlineStaff = records.filter(r => r.active_status === 'ONLINE' || r.active_status === 'ON_DUTY').length;

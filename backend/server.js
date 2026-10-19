@@ -1058,38 +1058,120 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, { success: true, message: 'Checked out successfully.', attendance: att }, req);
   }
 
-  if (pathname === '/api/attendance' && req.method === 'GET') {
-    const todayStr = new Date().toISOString().split('T')[0];
-    let records = Array.from(store.attendance.values()).filter(r => {
-      const uDoc = store.users.get(r.user_uid);
-      if (isDemoAccount(r, uDoc)) return false;
-      // Only return actual logins recorded for TODAY
-      let rDate = r.date || '';
-      if (!rDate && r.login_time) {
-        try { rDate = new Date(r.login_time).toISOString().split('T')[0]; } catch(e) {}
+// Helper to derive attendance records: first conducted visit of the day on a BDO account is considered login time
+function getConsolidatedTodayAttendance() {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const bdoVisitsToday = new Map();
+
+  // 1. Group today's visits by BDO to find first visit (login time), total visits, and last ping
+  for (const v of store.visits.values()) {
+    let vDate = v.visitDateString || '';
+    const ts = Number(v.timestamp || v.created_at || 0);
+    if (!vDate && ts > 0) {
+      try { vDate = new Date(ts).toISOString().split('T')[0]; } catch(e) {}
+    }
+    if (vDate !== todayStr) continue;
+
+    const bdoUid = (v.bdo_uid || v.bdoId || v.user_uid || v.bdo_name || '').toLowerCase().trim();
+    if (!bdoUid) continue;
+
+    if (!bdoVisitsToday.has(bdoUid)) {
+      bdoVisitsToday.set(bdoUid, []);
+    }
+    bdoVisitsToday.get(bdoUid).push({ ...v, ts });
+  }
+
+  // 2. Build or update attendance records from visits
+  const attendanceMap = new Map();
+
+  // Existing attendance entries for today
+  for (const r of store.attendance.values()) {
+    let rDate = r.date || '';
+    if (!rDate && r.login_time) {
+      try { rDate = new Date(r.login_time).toISOString().split('T')[0]; } catch(e) {}
+    }
+    if (rDate === todayStr) {
+      attendanceMap.set((r.user_uid || '').toLowerCase().trim(), { ...r });
+    }
+  }
+
+  // Merge in BDOs who conducted visits today
+  for (const [bdoUid, visitsList] of bdoVisitsToday.entries()) {
+    // Sort visits chronologically ascending to get first visit
+    visitsList.sort((a, b) => a.ts - b.ts);
+    const firstVisit = visitsList[0];
+    const lastVisit = visitsList[visitsList.length - 1];
+
+    const uDoc = store.users.get(bdoUid) || Array.from(store.users.values()).find(u => 
+      (u.uid || '').toLowerCase() === bdoUid || (u.name || '').toLowerCase() === bdoUid
+    );
+
+    const bdoName = firstVisit.bdo_name || (uDoc ? uDoc.name : bdoUid);
+    const bdoCode = firstVisit.bdoCode || firstVisit.userCode || (uDoc ? (uDoc.employee_id || uDoc.employeeId) : bdoUid);
+    const loginTimeIso = firstVisit.ts > 0 ? new Date(firstVisit.ts).toISOString() : new Date().toISOString();
+    const lastPingIso = lastVisit.ts > 0 ? new Date(lastVisit.ts).toISOString() : loginTimeIso;
+
+    const existingAtt = attendanceMap.get(bdoUid);
+    if (existingAtt) {
+      if (firstVisit.ts > 0) {
+        const attLoginTs = new Date(existingAtt.login_time || Date.now()).getTime();
+        if (firstVisit.ts < attLoginTs || !existingAtt.login_time) {
+          existingAtt.login_time = loginTimeIso;
+        }
       }
-      return rDate === todayStr;
+      existingAtt.visits_conducted = Math.max(Number(existingAtt.visits_conducted || 0), visitsList.length);
+      existingAtt.last_ping = lastPingIso;
+      existingAtt.active_status = 'ONLINE';
+      if (existingAtt.login_time) {
+        const workingHours = (Date.now() - new Date(existingAtt.login_time).getTime()) / 3600000;
+        existingAtt.total_working_hours = Number(Math.max(0.1, workingHours).toFixed(1));
+      }
+      attendanceMap.set(bdoUid, existingAtt);
+    } else {
+      const workingHours = firstVisit.ts > 0 ? (Date.now() - firstVisit.ts) / 3600000 : 0.1;
+      const derivedRecord = {
+        id: `att_${bdoUid}_${todayStr}`,
+        user_uid: uDoc ? uDoc.uid : bdoUid,
+        user_name: bdoName,
+        bdoCode: bdoCode,
+        role: uDoc ? (uDoc.role || 'BDO') : 'BDO',
+        team_id: firstVisit.team_id || (uDoc ? uDoc.team_id : 'team_north_01'),
+        area_id: firstVisit.area_id || (uDoc ? uDoc.area_id : 'area_north'),
+        date: todayStr,
+        login_time: loginTimeIso, // First conducted visit of the day on a BDO account considered as login Time
+        logout_time: null,
+        total_working_hours: Number(Math.max(0.1, workingHours).toFixed(1)),
+        active_status: 'ONLINE',
+        visits_conducted: visitsList.length,
+        last_ping: lastPingIso
+      };
+      attendanceMap.set(bdoUid, derivedRecord);
+    }
+  }
+
+  return Array.from(attendanceMap.values());
+}
+
+  if (pathname === '/api/attendance' && req.method === 'GET') {
+    const todayAttendance = getConsolidatedTodayAttendance();
+    let records = todayAttendance.filter(r => {
+      const uDoc = store.users.get(r.user_uid);
+      return !isDemoAccount(r, uDoc);
     });
     records = filterByRbac(records, user, { uidKey: 'user_uid', teamKey: 'team_id', areaKey: 'area_id' });
     return sendJson(res, 200, { success: true, count: records.length, attendance: records }, req);
   }
 
   if (pathname === '/api/attendance/summary' && req.method === 'GET') {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const filteredAtt = Array.from(store.attendance.values()).filter(r => {
+    const todayAttendance = getConsolidatedTodayAttendance();
+    const filteredAtt = todayAttendance.filter(r => {
       const uDoc = store.users.get(r.user_uid);
-      if (isDemoAccount(r, uDoc)) return false;
-      let rDate = r.date || '';
-      if (!rDate && r.login_time) {
-        try { rDate = new Date(r.login_time).toISOString().split('T')[0]; } catch(e) {}
-      }
-      return rDate === todayStr;
+      return !isDemoAccount(r, uDoc);
     });
     const allAtt = filterByRbac(filteredAtt, user, { uidKey: 'user_uid', teamKey: 'team_id', areaKey: 'area_id' });
     const onlineCount = allAtt.filter(a => a.active_status === 'ONLINE' || a.active_status === 'ON_DUTY').length;
     const totalWorkingHours = allAtt.reduce((sum, a) => sum + (Number(a.total_working_hours) || 0), 0);
     const totalShiftVisits = allAtt.reduce((sum, a) => sum + (Number(a.visits_conducted) || 0), 0);
-
     return sendJson(res, 200, {
       success: true,
       totalStaff: allAtt.length,
