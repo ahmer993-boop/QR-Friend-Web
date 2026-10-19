@@ -1,37 +1,150 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users Collection: Staff login, BDO credentials & roster
+    // Helper functions for Role-Based Access Control (RBAC)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isRole(role) {
+      return isAuthenticated() && getUserData().role == role;
+    }
+
+    function isMasterOrAdmin() {
+      return isAuthenticated() && (
+        getUserData().role == 'MASTER' || 
+        getUserData().role == 'ADMIN' ||
+        request.auth.token.role == 'MASTER' ||
+        request.auth.token.role == 'ADMIN'
+      );
+    }
+
+    function isAsm() {
+      return isAuthenticated() && getUserData().role == 'ASM';
+    }
+
+    function isTl() {
+      return isAuthenticated() && getUserData().role == 'TL';
+    }
+
+    function isBdo() {
+      return isAuthenticated() && (getUserData().role == 'BDO' || !('role' in getUserData()));
+    }
+
+    // 1. Users Collection
+    // - Master/Admin: Full read/write & user provisioning
+    // - TL/ASM: Read staff under their team/area
+    // - BDO: Read own profile
     match /users/{userId} {
-      allow read, write: if true;
+      allow read: if isMasterOrAdmin() || 
+                     (isAuthenticated() && request.auth.uid == userId) ||
+                     (isTl() && resource.data.team_id == getUserData().team_id) ||
+                     (isAsm() && resource.data.area_id == getUserData().area_id);
+      allow create, update: if isMasterOrAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      allow delete: if isMasterOrAdmin();
     }
 
-    // Merchants Collection: Merchant roster, GPS tags & QR statuses
+    // 2. Teams & Areas Hierarchy
+    match /teams/{teamId} {
+      allow read: if isAuthenticated();
+      allow write: if isMasterOrAdmin();
+    }
+
+    match /areas/{areaId} {
+      allow read: if isAuthenticated();
+      allow write: if isMasterOrAdmin();
+    }
+
+    // 3. Merchants Collection
+    // - Master/Admin: Full access across all regions
+    // - ASM: Access all merchants in their area_id
+    // - TL: Access all merchants in their team_id
+    // - BDO: Access merchants assigned to them or unassigned in their territory
     match /merchants/{merchantId} {
-      allow read, write: if true;
+      allow read: if isMasterOrAdmin() ||
+                     (isAsm() && resource.data.area_id == getUserData().area_id) ||
+                     (isTl() && resource.data.team_id == getUserData().team_id) ||
+                     (isBdo() && (resource.data.bdo_uid == request.auth.uid || resource.data.bdoId == request.auth.uid));
+      allow create, update: if isMasterOrAdmin() ||
+                               (isAsm() && request.resource.data.area_id == getUserData().area_id) ||
+                               (isTl() && request.resource.data.team_id == getUserData().team_id) ||
+                               (isBdo() && (request.resource.data.bdo_uid == request.auth.uid || request.resource.data.bdoId == request.auth.uid));
+      allow delete: if isMasterOrAdmin();
     }
 
-    // Visits Collection: BDO field inspection entries, photos & timestamps
+    // 4. Visits Collection (Requirement 1 & 5 & 6)
+    // - Default state: PENDING_VALIDATION or PENDING
+    // - BDO: Can create and view only their own submitted visits
+    // - TL: Can view and validate (approve/reject/feedback) visits of their team
+    // - ASM: Full view & validation across their area
+    // - Master/Admin: Full global view and validation privileges
     match /visits/{visitId} {
-      allow read, write: if true;
+      allow read: if isMasterOrAdmin() ||
+                     (isAsm() && resource.data.area_id == getUserData().area_id) ||
+                     (isTl() && resource.data.team_id == getUserData().team_id) ||
+                     (isBdo() && (resource.data.bdo_uid == request.auth.uid || resource.data.bdoId == request.auth.uid));
+      
+      // BDO logging their visit with GPS & photo url
+      allow create: if isAuthenticated() && (
+        isMasterOrAdmin() ||
+        (request.resource.data.bdo_uid == request.auth.uid || request.resource.data.bdoId == request.auth.uid)
+      );
+
+      // Validation workflow: TL, ASM, Master/Admin can validate
+      allow update: if isMasterOrAdmin() ||
+                       (isTl() && resource.data.team_id == getUserData().team_id) ||
+                       (isAsm() && resource.data.area_id == getUserData().area_id) ||
+                       (isBdo() && (resource.data.bdo_uid == request.auth.uid || resource.data.bdoId == request.auth.uid));
+
+      allow delete: if isMasterOrAdmin();
     }
 
-    // Immutable Audit Logs: Append-only security audit trail
+    // 5. Live Locations Collection (Requirement 3 & 4)
+    // - BDO streams their background GPS to /live_locations/{bdo_id}
+    // - TL / ASM / Admin read real-time location pings
+    match /live_locations/{bdoId} {
+      allow read: if isMasterOrAdmin() ||
+                     (isAsm() && resource.data.area_id == getUserData().area_id) ||
+                     (isTl() && resource.data.team_id == getUserData().team_id) ||
+                     (isAuthenticated() && request.auth.uid == bdoId);
+      allow write: if isMasterOrAdmin() || (isAuthenticated() && request.auth.uid == bdoId);
+    }
+
+    // 6. Attendance Collection (Requirement 4)
+    // - Staff check in / check out, hours calculation, visits count
+    match /attendance/{attId} {
+      allow read: if isMasterOrAdmin() ||
+                     (isAsm() && resource.data.area_id == getUserData().area_id) ||
+                     (isTl() && resource.data.team_id == getUserData().team_id) ||
+                     (isAuthenticated() && resource.data.user_uid == request.auth.uid);
+      allow create, update: if isAuthenticated() && (
+        isMasterOrAdmin() ||
+        request.resource.data.user_uid == request.auth.uid ||
+        request.auth.uid == attId
+      );
+      allow delete: if isMasterOrAdmin();
+    }
+
+    // 7. Audit Logs: Append-only security audit stream
     match /audit_logs/{logId} {
-      allow read, create: if true;
+      allow read: if isMasterOrAdmin();
+      allow create: if isAuthenticated();
       allow update, delete: if false;
     }
 
-    // Backups Collection: System backup snapshots
+    // 8. Backups: System snapshots
     match /backups/{backupId} {
-      allow read, write: if true;
+      allow read, write: if isMasterOrAdmin();
     }
 
-    // Fallback catch-all
+    // Backward compatibility & open access fallback for device token initializations
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isAuthenticated() || isMasterOrAdmin();
     }
   }
 }

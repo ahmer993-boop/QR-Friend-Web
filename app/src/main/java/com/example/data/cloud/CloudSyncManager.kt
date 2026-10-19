@@ -240,22 +240,30 @@ object CloudSyncManager {
                                 val merchantId = doc.getString("merchantId") ?: continue
                                 val visitDate = doc.getString("visitDateString") ?: ""
                                 val bdoId = doc.getLong("bdoId") ?: 0L
-                                val visit = VisitEntity(
-                                    merchantId = merchantId,
-                                    merchantName = doc.getString("merchantName") ?: "",
-                                    bdoId = bdoId,
-                                    bdoName = doc.getString("bdoName") ?: "",
-                                    visitDateString = visitDate,
-                                    latitude = doc.getDouble("latitude") ?: 0.0,
-                                    longitude = doc.getDouble("longitude") ?: 0.0,
-                                    gpsAccuracy = 5.0f,
-                                    gpsStatus = doc.getString("gpsStatus") ?: "VALID",
-                                    visitStatus = doc.getString("visitStatus") ?: "Completed",
-                                    qrDeployed = doc.getBoolean("qrDeployed") ?: false,
-                                    visitRemarks = doc.getString("visitRemarks") ?: "",
-                                    isSynced = true
-                                )
-                                db.visitDao().insertVisit(visit)
+                                val visitDocId = doc.id
+                                // Prevent duplicate insertion from Firebase snapshot listener
+                                val existingVisit = db.visitDao().getVisitByVisitIdStr(visitDocId) 
+                                    ?: db.visitDao().findExistingVisit(merchantId, bdoId, visitDate)
+
+                                if (existingVisit == null) {
+                                    val visit = VisitEntity(
+                                        visitIdStr = visitDocId,
+                                        merchantId = merchantId,
+                                        merchantName = doc.getString("merchantName") ?: "",
+                                        bdoId = bdoId,
+                                        bdoName = doc.getString("bdoName") ?: "",
+                                        visitDateString = visitDate,
+                                        latitude = doc.getDouble("latitude") ?: 0.0,
+                                        longitude = doc.getDouble("longitude") ?: 0.0,
+                                        gpsAccuracy = 5.0f,
+                                        gpsStatus = doc.getString("gpsStatus") ?: "VALID",
+                                        visitStatus = doc.getString("visitStatus") ?: "Completed",
+                                        qrDeployed = doc.getBoolean("qrDeployed") ?: false,
+                                        visitRemarks = doc.getString("visitRemarks") ?: "",
+                                        isSynced = true
+                                    )
+                                    db.visitDao().insertVisit(visit)
+                                }
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error syncing cloud visit: ${e.message}")
                             }
@@ -435,7 +443,8 @@ object CloudSyncManager {
         val firestore = firestoreInstance ?: return@withContext false
         try {
             val visitDocId = "${visit.merchantId}_${visit.visitDateString}_${visit.bdoId}"
-            val map = hashMapOf(
+            val photoPayload = visit.photoPath.ifBlank { visit.qrPhotoPath }
+            val map = hashMapOf<String, Any>(
                 "merchantId" to visit.merchantId,
                 "merchantName" to visit.merchantName,
                 "bdoId" to visit.bdoId,
@@ -447,6 +456,9 @@ object CloudSyncManager {
                 "visitStatus" to visit.visitStatus,
                 "qrDeployed" to visit.qrDeployed,
                 "visitRemarks" to visit.visitRemarks,
+                "photoUrl" to photoPayload,
+                "photo_url" to photoPayload,
+                "image" to photoPayload,
                 "timestamp" to System.currentTimeMillis()
             )
 

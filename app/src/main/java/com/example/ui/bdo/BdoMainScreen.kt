@@ -302,7 +302,8 @@ fun BdoMainScreen(
                 )
                 BdoTab.VISITS -> BdoVisitsScreen(
                     visits = bdoVisits,
-                    merchants = assignedMerchants
+                    merchants = assignedMerchants,
+                    onStartVisit = { viewModel.startVisitForMerchant(it) }
                 )
                 BdoTab.QR_REQUESTS -> QrOperationsScreen(
                     qrRequests = qrRequests.filter { it.bdoId == user.id },

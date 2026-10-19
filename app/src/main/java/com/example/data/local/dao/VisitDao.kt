@@ -34,6 +34,12 @@ interface VisitDao {
     @Query("SELECT * FROM visits WHERE id = :id LIMIT 1")
     suspend fun getVisitById(id: Long): VisitEntity?
 
+    @Query("SELECT * FROM visits WHERE visitIdStr = :visitIdStr LIMIT 1")
+    suspend fun getVisitByVisitIdStr(visitIdStr: String): VisitEntity?
+
+    @Query("SELECT * FROM visits WHERE merchantId = :merchantId AND bdoId = :bdoId AND visitDateString = :dateString LIMIT 1")
+    suspend fun findExistingVisit(merchantId: String, bdoId: Long, dateString: String): VisitEntity?
+
     @Query("SELECT * FROM visits WHERE isSynced = 0")
     fun getUnsyncedVisits(): Flow<List<VisitEntity>>
 

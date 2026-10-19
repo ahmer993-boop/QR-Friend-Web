@@ -1,0 +1,20 @@
+[
+  {
+    "id": "loc_ahmer_bdo",
+    "bdo_uid": "ahmer_bdo",
+    "user_name": "Ahmer Field Lead",
+    "role": "BDO",
+    "team_id": "team_north_01",
+    "area_id": "area_north",
+    "latitude": 33.6844,
+    "longitude": 73.0479,
+    "accuracy": 8.5,
+    "eventType": "VISIT_DISPATCH",
+    "last_event_type": "VISIT_DISPATCH",
+    "timestamp": 1791784000000,
+    "last_captured_at": 1791784000000,
+    "last_active_ping": "2026-10-12T05:46:40.000Z",
+    "is_online": true,
+    "is_logged_in": true
+  }
+]

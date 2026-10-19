@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>QR Friend - Live Cloud Monitoring & Master Management Dashboard</title>
+  
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -26,72 +27,183 @@
       }
     }
   </script>
+
+  <!-- Leaflet CSS & JS for Real-Time GPS Map Tracking -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
   <!-- SheetJS for Excel (.xlsx / .xls) & CSV Parsing -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     body { font-family: 'Inter', sans-serif; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #f1f5f9; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .leaflet-popup-content-wrapper { border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+<body class="bg-slate-900 text-slate-800 antialiased min-h-screen flex flex-col">
+  <!-- ===================================================================== -->
+  <!-- 0. UNIFIED ENTERPRISE WEB LOGIN & LANDING VIEW (Requirement 1) -->
+  <!-- ===================================================================== -->
+  <div id="webAuthLandingScreen" class="fixed inset-0 z-50 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <!-- Background glowing aesthetics -->
+    <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
-  <!-- TOP NAVIGATION BAR -->
-  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-100">
-          <i class="fa-solid fa-qrcode text-lg"></i>
+    <div class="max-w-md w-full relative z-10 space-y-6">
+      <!-- Brand Header -->
+      <div class="text-center space-y-3">
+        <div class="w-20 h-20 rounded-3xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-violet-600 flex items-center justify-center text-white text-3xl mx-auto shadow-xl shadow-indigo-500/25 border border-indigo-400/30 overflow-hidden p-0.5">
+          <img src="/assets/mascot.jpg" alt="QR Friend Mascot" class="w-full h-full object-cover rounded-[22px]" onerror="this.onerror=null;this.parentElement.innerHTML='<i class=\'fa-solid fa-qrcode\'></i>';" />
+        </div>
+        <div>
+          <div class="flex items-center justify-center space-x-2">
+            <img src="/assets/mascot.jpg" alt="Mascot" class="w-7 h-7 rounded-full object-cover border border-emerald-400/60 inline-block" onerror="this.style.display='none';" />
+            <h1 class="text-2xl font-black tracking-tight text-white">QR Friend</h1>
+            <span class="text-[10px] bg-indigo-500/25 text-indigo-300 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-400/30 uppercase tracking-wider">Enterprise CRM</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">Field Force Management & Real-Time Cloud Portal</p>
+        </div>
+      </div>
+
+      <!-- Auth Card -->
+      <div class="bg-slate-900/90 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl space-y-5">
+        <div class="border-b border-slate-800 pb-3 flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold text-white">Sign In to Dashboard</h2>
+            <p class="text-[11px] text-slate-400">Enter your credentials or choose quick access</p>
+          </div>
+          <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg text-[10px] font-bold border border-emerald-500/30">Firebase Auth</span>
+        </div>
+
+        <form id="formWebLogin" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">User ID / Username / Email</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500 text-xs">
+                <i class="fa-solid fa-user"></i>
+              </span>
+              <input type="text" id="inputWebLoginUsername" placeholder="e.g. master, admin_hq, asm_isb01" required
+                class="w-full bg-slate-950 pl-9 pr-3 py-2.5 text-xs text-white rounded-xl border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all placeholder:text-slate-600" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Password</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500 text-xs">
+                <i class="fa-solid fa-lock"></i>
+              </span>
+              <input type="password" id="inputWebLoginPassword" placeholder="••••••••" required
+                class="w-full bg-slate-950 pl-9 pr-3 py-2.5 text-xs text-white rounded-xl border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all placeholder:text-slate-600" />
+            </div>
+          </div>
+
+          <button type="submit" id="btnSubmitWebLogin" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center space-x-2">
+            <i class="fa-solid fa-right-to-bracket"></i>
+            <span>Sign In to Field Force Portal</span>
+          </button>
+        </form>
+
+
+
+        <div class="text-center text-[11px] text-slate-500 pt-1">
+          <span>Enterprise Cloud Project: <strong class="text-slate-400 font-mono">qr-friend-c4eb1</strong></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===================================================================== -->
+  <!-- TOP HEADER & BRANDING BAR -->
+  <!-- ===================================================================== -->
+  <header class="bg-slate-950 text-white border-b border-slate-800 sticky top-0 z-40 shadow-xl">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Brand Logo & App Identity -->
+      <div class="flex items-center space-x-3.5">
+        <div class="relative w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-500/25 flex-shrink-0 overflow-hidden border border-white/20">
+          <img src="/assets/mascot.jpg" alt="QR Friend Mascot" class="w-full h-full object-cover" onerror="this.onerror=null;this.parentElement.innerHTML='<i class=\'fa-solid fa-qrcode\'></i>';" />
         </div>
         <div>
           <div class="flex items-center space-x-2">
-            <h1 class="text-lg font-bold text-slate-900 tracking-tight">QR Friend</h1>
-            <span class="text-xs bg-indigo-100 text-indigo-800 font-semibold px-2 py-0.5 rounded-full">Web Central</span>
+            <div class="flex items-center space-x-1.5">
+              <img src="/assets/mascot.jpg" alt="Mascot" class="w-6 h-6 rounded-full object-cover border border-emerald-400/50 inline-block" onerror="this.style.display='none';" />
+              <h1 class="text-base sm:text-lg font-black tracking-tight text-white">QR Friend</h1>
+            </div>
+            <span class="text-[10px] bg-indigo-500/20 text-indigo-300 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-400/30 uppercase tracking-wider">Enterprise CRM</span>
           </div>
-          <p class="text-xs text-slate-500">Live Field Monitoring & Master Cloud Management</p>
+          <p class="text-[11px] text-slate-400">Field Force Management &amp; Real-Time Cloud Monitoring</p>
         </div>
       </div>
 
-      <div class="flex items-center space-x-3 sm:space-x-4">
-        <button id="btnMasterAccessBadge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-violet-50 hover:text-violet-700 hover:border-violet-300 border border-slate-200 transition-all shadow-sm">
-          <i id="masterBadgeIcon" class="fa-solid fa-shield-halved text-slate-500"></i>
-          <span id="masterBadgeText">Viewer Mode</span>
-          <span id="masterBadgeTag" class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-mono">Unlock</span>
+      <!-- Center / Controls: Role-Based Access Switcher & Master Access -->
+      <div class="flex items-center flex-wrap gap-2.5">
+        
+        <!-- RBAC Hierarchy Role Switcher -->
+        <div class="flex items-center space-x-1.5 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 text-xs">
+          <span class="text-slate-400 text-[11px] font-semibold"><i class="fa-solid fa-user-shield text-indigo-400 mr-1"></i>Role:</span>
+          <select id="selectRbacRole" class="bg-slate-800 text-indigo-200 font-bold text-xs rounded-lg px-2 py-1 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="MASTER" selected>👑 Master (Global Commander)</option>
+            <option value="ADMIN">🛡️ Admin (HQ Operations)</option>
+            <option value="ASM">👔 ASM (Area Manager - North)</option>
+            <option value="TL">📋 TL (Team Lead - Alpha)</option>
+            <option value="BDO">🚶 BDO (Field Agent - Naseem)</option>
+          </select>
+        </div>
+
+        <!-- Master Details Button (Always accessible) -->
+        <button id="btnHeaderMasterDetails" class="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-md flex items-center space-x-1.5 transition-all">
+          <i class="fa-solid fa-crown"></i>
+          <span>Master Details (MST-001)</span>
         </button>
 
-        <div id="connectionStatusBadge" class="hidden sm:flex items-center space-x-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs px-3 py-1.5 rounded-full font-medium shadow-sm transition-all duration-300">
-          <span class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span id="connectionStatusText">Firestore Live</span>
-          <span class="text-[10px] bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-mono">qr-friend-c4eb1</span>
+        <!-- Connection Status Pill -->
+        <div id="connectionStatusBadge" class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="connectionStatusText">Cloud Online</span>
         </div>
 
-        <div class="hidden md:flex flex-col text-right">
-          <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Last Cloud Event</span>
-          <span id="lastEventTime" class="text-xs font-mono font-medium text-slate-600">Connecting...</span>
-        </div>
+        <!-- Master Access Mode Badge / Button -->
+        <button id="btnMasterAccessBadge" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-400/20 text-amber-300 border border-amber-400/40 hover:bg-amber-400/30 transition-colors">
+          <i class="fa-solid fa-key"></i>
+          <span id="masterBadgeText">Master ID Active</span>
+        </button>
 
-        <button id="btnOpenConfigModal" title="Firebase Web Configuration" class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200">
-          <i class="fa-solid fa-sliders"></i>
+        <!-- Sign Out -->
+        <button id="btnWebSignOut" title="Sign Out" class="px-2.5 py-1.5 text-xs text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/80 rounded-xl border border-rose-800/60 transition-colors flex items-center space-x-1">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          <span class="hidden sm:inline">Logout</span>
+        </button>
+
+        <!-- Fast Refresh -->
+        <button id="btnRefreshData" title="Refresh Live Data" class="p-2 text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-800 transition-colors">
+          <i class="fa-solid fa-arrows-rotate"></i>
         </button>
       </div>
+
     </div>
   </header>
 
-  <!-- MAIN DASHBOARD CONTENT -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+  <!-- ===================================================================== -->
+  <!-- MAIN WORKSPACE CONTAINER -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5 bg-white text-slate-800 rounded-t-3xl shadow-2xl mt-2">
 
     <!-- MASTER ID STATUS BANNERS -->
-    <div id="masterStatusBanner" class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    
+    <!-- Mode 1: Locked / Viewer Mode (if locked) -->
+    <div id="masterStatusBanner" class="hidden bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div class="flex items-center space-x-3.5">
         <div class="w-11 h-11 rounded-xl bg-violet-600/30 border border-violet-500/40 flex items-center justify-center text-violet-300 text-lg flex-shrink-0">
           <i class="fa-solid fa-shield-halved"></i>
@@ -101,16 +213,19 @@
             <span class="text-sm font-bold text-white tracking-tight">Viewer Mode (Monitoring Only)</span>
             <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">Read-Only</span>
           </div>
-          <p class="text-xs text-slate-400 mt-0.5">Authorize Master ID to unlock full management rights: bulk upload merchants (Excel/CSV), deploy QRs, configure GPS tolerance, and manage field agents.</p>
+          <p class="text-xs text-slate-400 mt-0.5">Authorize Master ID to unlock full management rights: bulk upload merchants (Excel/CSV), deploy QRs, and manage field agents.</p>
         </div>
       </div>
-      <button id="btnOpenMasterLogin" class="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition-all whitespace-nowrap">
-        <i class="fa-solid fa-key"></i>
-        <span>Unlock Master ID All-Access</span>
-      </button>
+      <div class="flex items-center space-x-2">
+        <button id="btnOpenMasterLogin" class="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition-all whitespace-nowrap">
+          <i class="fa-solid fa-key"></i>
+          <span>Unlock Master ID All-Access</span>
+        </button>
+      </div>
     </div>
 
-    <div id="masterActiveBanner" class="hidden bg-gradient-to-r from-violet-950 via-indigo-900 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-xl border border-violet-500/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <!-- Mode 2: Unlocked Master All-Access Mode -->
+    <div id="masterActiveBanner" class="bg-gradient-to-r from-violet-950 via-indigo-900 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-xl border border-violet-500/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div class="flex items-center space-x-3.5">
         <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 text-xl font-bold shadow-lg shadow-amber-500/20 flex-shrink-0">
           <i class="fa-solid fa-crown"></i>
@@ -120,10 +235,15 @@
             <span class="text-sm font-bold text-white tracking-tight">Master ID Active (Super Administrator)</span>
             <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2.5 py-0.5 rounded-full font-mono border border-amber-400/30 font-bold uppercase tracking-wider">All-Access Active</span>
           </div>
-          <p class="text-xs text-indigo-200 mt-0.5">Authenticated as <strong class="text-white">Master Administrator (MST-001)</strong>. Direct Firestore cloud mutations & system controls enabled.</p>
+          <p class="text-xs text-indigo-200 mt-0.5">Authenticated as <strong class="text-white">Master Administrator (MST-001)</strong>. Direct Firestore cloud mutations, live dispatch verification &amp; operational metrics enabled.</p>
         </div>
       </div>
+
       <div class="flex flex-wrap items-center gap-2">
+        <button id="btnViewMasterDetails" class="px-3.5 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md flex items-center space-x-1.5 transition-all border border-violet-400">
+          <i class="fa-solid fa-id-card"></i>
+          <span>Master Details</span>
+        </button>
         <button id="btnQuickUpload" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl shadow-sm flex items-center space-x-1.5 transition-colors">
           <i class="fa-solid fa-file-excel"></i>
           <span>Upload Merchants</span>
@@ -136,4 +256,1110 @@
           <i class="fa-solid fa-user-plus"></i>
           <span>Add BDO</span>
         </button>
-        <button id="btnLockMasterAccess" title="Lock Master Mode" class="px-3 py-2 bg-white/10 hover:bg-rose-600/90 text-white
+        <button id="btnLockMasterAccess" title="Lock Master Mode" class="px-3 py-2 bg-white/10 hover:bg-rose-600/90 text-white text-xs font-semibold rounded-xl transition-colors border border-white/20">
+          <i class="fa-solid fa-lock"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- PRIMARY DASHBOARD NAVIGATION TABS -->
+    <div class="border-b border-slate-200 overflow-x-auto">
+      <nav class="flex space-x-2 sm:space-x-4 pb-px" aria-label="Tabs">
+        
+        <button id="tabBtnOverview" class="border-indigo-600 text-indigo-600 font-bold whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>Overview &amp; KPIs</span>
+        </button>
+
+        <button id="tabBtnMap" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-map-location-dot text-cyan-500"></i>
+          <span>Live GPS Tracking</span>
+          <span class="bg-cyan-100 text-cyan-800 py-0.5 px-2 rounded-full text-[10px] font-bold">Real-Time</span>
+        </button>
+
+        <button id="tabBtnValidation" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-clipboard-check text-rose-500"></i>
+          <span>Visit Verification</span>
+          <span id="tabCountPendingValidation" class="bg-rose-100 text-rose-700 py-0.5 px-2 rounded-full text-[10px] font-bold">2 Pending</span>
+        </button>
+
+        <button id="tabBtnAttendance" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-clipboard-user text-purple-500"></i>
+          <span>Attendance &amp; Shifts</span>
+        </button>
+
+        <button id="tabBtnMerchants" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-store text-emerald-500"></i>
+          <span>Merchants Directory</span>
+          <span id="tabCountMerchants" class="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px] font-semibold">0</span>
+        </button>
+
+        <button id="tabBtnUpload" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-file-arrow-up text-amber-500"></i>
+          <span>Bulk Upload</span>
+          <span class="bg-amber-100 text-amber-800 py-0.5 px-2 rounded-full text-[10px] font-bold">Excel/CSV</span>
+        </button>
+
+        <button id="tabBtnVisits" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-route text-indigo-500"></i>
+          <span>Field Visits</span>
+        </button>
+
+        <button id="tabBtnBdos" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-users text-blue-500"></i>
+          <span>Field Staff (BDOs)</span>
+          <span id="tabCountBdos" class="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px] font-semibold">0</span>
+        </button>
+
+        <button id="tabBtnMaster" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-crown text-amber-500"></i>
+          <span>Master Portal</span>
+        </button>
+
+        <button id="tabBtnSettings" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-sliders text-slate-500"></i>
+          <span>Governance</span>
+        </button>
+
+        <button id="tabBtnAudit" class="border-transparent text-slate-500 hover:text-slate-700 whitespace-nowrap py-3 px-2 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5">
+          <i class="fa-solid fa-clock-rotate-left text-slate-500"></i>
+          <span>Audit Trail</span>
+          <span id="tabCountAudit" class="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px] font-semibold">0</span>
+        </button>
+
+      </nav>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 1: OVERVIEW & OPERATIONAL KPIS -->
+    <!-- ===================================================================== -->
+    <div id="tabViewOverview" class="space-y-6">
+      
+      <!-- KPI CARDS GRID -->
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+        
+        <!-- Total Visits Daily / Monthly -->
+        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 text-xs font-semibold">
+            <span>Visits (Daily)</span>
+            <i class="fa-solid fa-calendar-day text-indigo-500"></i>
+          </div>
+          <div id="kpiDailyVisits" class="text-2xl font-black text-slate-900 mt-2">4</div>
+          <div class="text-[11px] text-slate-400 mt-1">Conducted today</div>
+        </div>
+
+        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 text-xs font-semibold">
+            <span>Visits (Monthly)</span>
+            <i class="fa-solid fa-calendar-days text-indigo-600"></i>
+          </div>
+          <div id="kpiMonthlyVisits" class="text-2xl font-black text-slate-900 mt-2">4</div>
+          <div class="text-[11px] text-slate-400 mt-1">Total this cycle</div>
+        </div>
+
+        <!-- Pending Validations -->
+        <div class="bg-amber-50/50 rounded-2xl p-4 border border-amber-200 shadow-sm">
+          <div class="flex items-center justify-between text-amber-800 text-xs font-semibold">
+            <span>Pending Validation</span>
+            <i class="fa-solid fa-clock text-amber-600"></i>
+          </div>
+          <div id="kpiPendingValidations" class="text-2xl font-black text-amber-900 mt-2">2</div>
+          <div class="text-[11px] text-amber-700 mt-1">Awaiting TL Review</div>
+        </div>
+
+        <!-- Active Online Staff -->
+        <div class="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-200 shadow-sm">
+          <div class="flex items-center justify-between text-emerald-800 text-xs font-semibold">
+            <span>Online BDOs</span>
+            <i class="fa-solid fa-signal text-emerald-600"></i>
+          </div>
+          <div id="kpiOnlineBdos" class="text-2xl font-black text-emerald-900 mt-2">4</div>
+          <div class="text-[11px] text-emerald-700 mt-1">Active GPS streaming</div>
+        </div>
+
+        <!-- Total Merchants -->
+        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 text-xs font-semibold">
+            <span>Merchants</span>
+            <i class="fa-solid fa-store text-violet-500"></i>
+          </div>
+          <div id="kpiTotalMerchants" class="text-2xl font-black text-slate-900 mt-2">5</div>
+          <div class="text-[11px] text-slate-400 mt-1">Onboarded stores</div>
+        </div>
+
+        <!-- Active QR Standees -->
+        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 text-xs font-semibold">
+            <span>Active QRs</span>
+            <i class="fa-solid fa-qrcode text-emerald-500"></i>
+          </div>
+          <div id="kpiActiveQrs" class="text-2xl font-black text-emerald-600 mt-2">4</div>
+          <div class="text-[11px] text-slate-400 mt-1">Deployed in field</div>
+        </div>
+
+      </div>
+
+      <!-- CHARTS ROW -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        
+        <!-- BDO Performance Leaderboard (Bar Chart) -->
+        <div class="lg:col-span-2 bg-slate-50 p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Field Agent Performance (Leaderboard)</h3>
+              <p class="text-xs text-slate-400">Merchants onboarded per active BDO</p>
+            </div>
+            <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">Live Team Ranking</span>
+          </div>
+          <div class="h-64">
+            <canvas id="bdoLeaderboardChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Store Categories / Status Doughnut -->
+        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Merchant Categories</h3>
+              <p class="text-xs text-slate-400">Retail breakdown &amp; segmentation</p>
+            </div>
+          </div>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="statusDoughnutChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- WEEKLY TREND LINE CHART -->
+      <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Weekly Field Visit Velocity &amp; QR Deployments</h3>
+            <p class="text-xs text-slate-400">Daily trajectory across active field teams</p>
+          </div>
+        </div>
+        <div class="h-60">
+          <canvas id="trendsLineChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 2: REAL-TIME BDO LIVE GPS TRACKING MAP (Requirement 3) -->
+    <!-- ===================================================================== -->
+    <div id="tabViewMap" class="hidden space-y-4">
+      
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 text-white p-4 rounded-2xl">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg">
+            <i class="fa-solid fa-satellite-dish"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold">Real-Time BDO Live GPS Location Tracking</h2>
+            <p class="text-xs text-slate-400">Background telemetry streaming for field staff during working hours</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button id="btnRefreshMap" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-200 flex items-center space-x-1.5">
+            <i class="fa-solid fa-rotate"></i>
+            <span>Refresh Coordinates</span>
+          </button>
+          <span class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping mr-1"></span>
+            <span>Streaming Live</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- MAP CONTAINER & AGENT TELEMETRY SIDEBAR -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        
+        <!-- Interactive Leaflet Map -->
+        <div class="lg:col-span-3 bg-slate-100 rounded-2xl border border-slate-300 overflow-hidden shadow-inner h-[550px] relative">
+          <div id="liveGpsMap" class="w-full h-full"></div>
+        </div>
+
+        <!-- Active Field Staff Telemetry Cards -->
+        <div class="space-y-3 max-h-[550px] overflow-y-auto pr-1">
+          <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active Staff Telemetry (<span id="mapOnlineStaffCount">4</span>)</div>
+          <div id="liveStaffCardsContainer" class="space-y-2.5">
+            <!-- Dynamic staff cards rendered by app.js -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 3: VISIT VERIFICATION & VALIDATION QUEUE (Requirement 5) -->
+    <!-- ===================================================================== -->
+    <div id="tabViewValidation" class="hidden space-y-4">
+      
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-rose-950 via-slate-900 to-indigo-950 text-white p-4 rounded-2xl">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg">
+            <i class="fa-solid fa-clipboard-check"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold">Team Lead (TL) Visit Verification &amp; Approval Queue</h2>
+            <p class="text-xs text-rose-200">Review dispatches, inspect photo attachments &amp; validate field visits with feedback</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <select id="selectValidationStatusFilter" class="bg-slate-800 text-white text-xs font-semibold rounded-xl px-3 py-1.5 border border-slate-700">
+            <option value="PENDING">Pending Review Only</option>
+            <option value="ALL">All Validations</option>
+            <option value="APPROVED">Approved Visits</option>
+            <option value="REJECTED">Rejected Visits</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Pending Validations List -->
+      <div id="validationQueueContainer" class="space-y-3">
+        <!-- Rendered by app.js -->
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 4: ATTENDANCE TRACKING & REPORTING DASHBOARD (Requirement 4) -->
+    <!-- ===================================================================== -->
+    <div id="tabViewAttendance" class="hidden space-y-5">
+      
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 text-white p-4 rounded-2xl">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-lg">
+            <i class="fa-solid fa-user-clock"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold">Attendance Tracking &amp; Shift Reporting</h2>
+            <p class="text-xs text-slate-400">Login/Logout records, total working hours &amp; daily visits conducted per shift</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button id="btnQuickCheckIn" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold rounded-xl text-white flex items-center space-x-1.5">
+            <i class="fa-solid fa-right-to-bracket"></i>
+            <span>Log Check-In</span>
+          </button>
+          <button id="btnQuickCheckOut" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-xs font-bold rounded-xl text-white flex items-center space-x-1.5">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            <span>Log Check-Out</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Attendance Summary KPIs -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+          <div class="text-xs text-slate-500 font-semibold">Total Field Staff</div>
+          <div id="attKpiTotalStaff" class="text-2xl font-black text-slate-800 mt-1">4</div>
+        </div>
+        <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+          <div class="text-xs text-emerald-800 font-semibold">Currently Online / On Duty</div>
+          <div id="attKpiOnlineStaff" class="text-2xl font-black text-emerald-700 mt-1">4</div>
+        </div>
+        <div class="bg-indigo-50 p-4 rounded-2xl border border-indigo-200">
+          <div class="text-xs text-indigo-800 font-semibold">Average Shift Hours</div>
+          <div id="attKpiAvgHours" class="text-2xl font-black text-indigo-700 mt-1">5.7 hrs</div>
+        </div>
+        <div class="bg-purple-50 p-4 rounded-2xl border border-purple-200">
+          <div class="text-xs text-purple-800 font-semibold">Total Shift Visits Today</div>
+          <div id="attKpiTotalVisits" class="text-2xl font-black text-purple-700 mt-1">10</div>
+        </div>
+      </div>
+
+      <!-- Attendance Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-slate-700 uppercase font-bold text-[11px] border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4">Field Agent</th>
+                <th class="py-3 px-4">Role &amp; Team</th>
+                <th class="py-3 px-4">Login Time</th>
+                <th class="py-3 px-4">Logout Time</th>
+                <th class="py-3 px-4">Working Hours</th>
+                <th class="py-3 px-4">Visits Conducted</th>
+                <th class="py-3 px-4">Active Status</th>
+                <th class="py-3 px-4">Last Ping</th>
+              </tr>
+            </thead>
+            <tbody id="attendanceTableBody" class="divide-y divide-slate-100">
+              <!-- Rendered by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 5: MERCHANTS DIRECTORY (Expanded Address Schema) -->
+    <!-- ===================================================================== -->
+    <div id="tabViewMerchants" class="hidden space-y-4">
+      
+      <!-- Search, Filters, and Actions Bar -->
+      <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2 flex-1">
+          <div class="relative flex-1 min-w-[200px]">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs"></i>
+            <input id="inputSearchMerchants" type="text" placeholder="Search by merchant name, address, city, contact..." class="w-full bg-white pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <select id="selectMerchantStatusFilter" class="bg-white text-xs rounded-xl px-3 py-2 border border-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="ALL">All Statuses</option>
+            <option value="Active">Active Stores</option>
+            <option value="Pending">Pending Validation</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button id="btnOpenAddMerchantModal" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-sm flex items-center space-x-1.5 transition-colors">
+            <i class="fa-solid fa-plus"></i>
+            <span>New Merchant</span>
+          </button>
+          <button id="btnExportMerchantsCsv" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center space-x-1.5 transition-colors">
+            <i class="fa-solid fa-file-csv"></i>
+            <span>Export CSV</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Merchants Table with Expanded Schema -->
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-slate-700 uppercase font-bold text-[11px] border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-3">Merchant ID</th>
+                <th class="py-3 px-3">Store &amp; Category</th>
+                <th class="py-3 px-3">Full Street Address &amp; City</th>
+                <th class="py-3 px-3">Contact &amp; Mobile</th>
+                <th class="py-3 px-3">GPS Coordinates</th>
+                <th class="py-3 px-3">QR Code</th>
+                <th class="py-3 px-3">Assigned BDO</th>
+                <th class="py-3 px-3">Status</th>
+                <th class="py-3 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="merchantTableBody" class="divide-y divide-slate-100">
+              <!-- Rendered by app.js -->
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+          <span id="merchantPaginationInfo">Showing 1 to 5 of 5 merchants</span>
+          <div class="flex items-center space-x-1.5">
+            <button id="btnPrevMerchantsPage" class="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 font-semibold disabled:opacity-50">Previous</button>
+            <button id="btnNextMerchantsPage" class="px-2.5 py-1 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 font-semibold disabled:opacity-50">Next</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 6: EXPANDED BULK UPLOAD (Excel/CSV - Requirement 8) -->
+    <!-- ===================================================================== -->
+    <div id="tabViewUpload" class="hidden space-y-5">
+      
+      <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="text-sm font-bold text-amber-950">Enterprise Merchant Data Bulk Upload Engine</span>
+            <span class="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">XLSX &bull; CSV</span>
+          </div>
+          <p class="text-xs text-amber-800 mt-1">Supports all field attributes: full street address, landmark, area, city, GPS coordinates, contact person, mobile number, merchant category, and operational notes.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="btnDownloadCsvTemplate" class="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 shadow-sm flex items-center space-x-1.5">
+            <i class="fa-solid fa-file-csv text-emerald-600"></i>
+            <span>Download CSV Template</span>
+          </button>
+          <button id="btnDownloadXlsxTemplate" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-sm flex items-center space-x-1.5">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>Download Excel Template</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- File Dropzone -->
+      <div class="bg-white p-6 rounded-2xl border-2 border-dashed border-slate-300 hover:border-indigo-500 transition-colors text-center cursor-pointer" id="uploadDropzone">
+        <input type="file" id="fileUploadInput" accept=".xlsx, .xls, .csv" class="hidden" />
+        <div class="max-w-md mx-auto space-y-2">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto text-xl shadow-sm">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+          </div>
+          <div class="text-sm font-bold text-slate-800">Drag &amp; drop your Excel or CSV spreadsheet here</div>
+          <p class="text-xs text-slate-400">or click to browse from your computer (.xlsx, .xls, .csv)</p>
+        </div>
+      </div>
+
+      <!-- Upload Staging & Preview Section -->
+      <div id="uploadPreviewSection" class="hidden space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+          <div class="flex items-center space-x-3 text-xs font-bold">
+            <span class="text-slate-600">Total: <strong id="valTotalCount" class="text-slate-900">0</strong></span>
+            <span class="text-emerald-700">New Stores: <strong id="valNewCount">0</strong></span>
+            <span class="text-indigo-700">Updates: <strong id="valUpdateCount">0</strong></span>
+            <span class="text-rose-700">Invalid: <strong id="valInvalidCount">0</strong></span>
+          </div>
+          <button id="btnCommitBatchImport" class="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-md flex items-center space-x-2">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Commit Batch Import to Cloud</span>
+          </button>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div class="overflow-x-auto max-h-96">
+            <table class="w-full text-left text-xs text-slate-600">
+              <thead class="bg-slate-50 text-slate-700 uppercase font-bold text-[10px] border-b border-slate-200 sticky top-0">
+                <tr>
+                  <th class="py-2.5 px-3">#</th>
+                  <th class="py-2.5 px-3">Action</th>
+                  <th class="py-2.5 px-3">ID</th>
+                  <th class="py-2.5 px-3">Name</th>
+                  <th class="py-2.5 px-3">Category</th>
+                  <th class="py-2.5 px-3">Full Address</th>
+                  <th class="py-2.5 px-3">City</th>
+                  <th class="py-2.5 px-3">Contact Person</th>
+                  <th class="py-2.5 px-3">Mobile</th>
+                  <th class="py-2.5 px-3">GPS (Lat/Lng)</th>
+                  <th class="py-2.5 px-3">Status</th>
+                  <th class="py-2.5 px-3">Validation</th>
+                </tr>
+              </thead>
+              <tbody id="stagingTableBody" class="divide-y divide-slate-100 font-mono text-[11px]">
+                <!-- Rendered by app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 7: FIELD VISITS & DISPATCHES (Requirement 1) -->
+    <!-- ===================================================================== -->
+    <div id="tabViewVisits" class="hidden space-y-4">
+      
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">BDO Field Visits &amp; Verification Dispatches</h2>
+          <p class="text-xs text-slate-400">Streamed photo attachments, GPS check-ins &amp; validation history</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button id="btnOpenNewVisitModal" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-sm flex items-center space-x-1.5 transition-colors">
+            <i class="fa-solid fa-camera"></i>
+            <span>Log Visit Dispatch</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Visits Feed / Grid -->
+      <div id="visitsFeedContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Rendered by app.js -->
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 8: FIELD AGENTS (BDOs) & ROSTER -->
+    <!-- ===================================================================== -->
+    <div id="tabViewBdos" class="hidden space-y-4">
+      
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">Field Officer Roster &amp; Targets Management</h2>
+          <p class="text-xs text-slate-400">Manage BDO field staff, territory assignments &amp; monthly goals</p>
+        </div>
+        <button id="btnOpenAddBdoModal" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-sm flex items-center space-x-1.5 transition-colors">
+          <i class="fa-solid fa-user-plus"></i>
+          <span>Add New BDO</span>
+        </button>
+      </div>
+
+      <!-- BDO Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-slate-700 uppercase font-bold text-[11px] border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4">Officer Name &amp; UID</th>
+                <th class="py-3 px-4">Role &amp; Team</th>
+                <th class="py-3 px-4">Assigned Territory</th>
+                <th class="py-3 px-4">Assigned Targets</th>
+                <th class="py-3 px-4">Achieved</th>
+                <th class="py-3 px-4">Completion %</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bdoTableBody" class="divide-y divide-slate-100">
+              <!-- Rendered by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 9: MASTER COMMAND PORTAL (Requirement 7) -->
+    <!-- ===================================================================== -->
+    <div id="tabViewMaster" class="hidden space-y-6">
+      
+      <div class="bg-gradient-to-r from-slate-950 via-indigo-950 to-violet-950 p-6 rounded-3xl text-white shadow-xl border border-indigo-500/30">
+        <div class="flex items-center space-x-4">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 text-2xl font-black shadow-lg shadow-amber-400/30 flex-shrink-0">
+            <i class="fa-solid fa-crown"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h2 class="text-xl font-black">Central Master Operations Portal</h2>
+              <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2.5 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider border border-amber-400/40">Tier 0 Root Master</span>
+            </div>
+            <p class="text-xs text-indigo-200 mt-1 font-mono">Master ID: MST-001 &bull; Global Operations Authority &bull; Full Cloud Read/Write</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Master Diagnostics Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+          <div class="font-bold text-slate-500 uppercase tracking-wider">System Architecture</div>
+          <div class="text-base font-bold text-slate-800 mt-1">Full-Stack Cloud Run + Android</div>
+          <p class="text-slate-500 mt-1">Multi-tier hierarchy with strict RBAC enforcement</p>
+        </div>
+        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+          <div class="font-bold text-slate-500 uppercase tracking-wider">Cloud Database Status</div>
+          <div class="text-base font-bold text-emerald-600 mt-1">Synchronized &bull; Live Memory + Disk</div>
+          <p class="text-slate-500 mt-1">Zero latency local and remote synchronization</p>
+        </div>
+        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+          <div class="font-bold text-slate-500 uppercase tracking-wider">Security &amp; Encryption</div>
+          <div class="text-base font-bold text-indigo-600 mt-1">SSL/TLS Verified Endpoint</div>
+          <p class="text-slate-500 mt-1">Cross-Origin Resource Sharing (CORS) enabled</p>
+        </div>
+      </div>
+
+      <!-- Master Control Actions -->
+      <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+        <h3 class="text-sm font-bold text-slate-900">Emergency &amp; System Overrides</h3>
+        <div class="flex flex-wrap gap-2.5">
+          <button id="btnMasterTriggerSync" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 shadow-sm">
+            <i class="fa-solid fa-sync"></i>
+            <span>Force System-Wide Sync</span>
+          </button>
+          <button id="btnMasterOpenDirectDetail" class="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 shadow-sm">
+            <i class="fa-solid fa-id-card"></i>
+            <span>Open Master Security Card</span>
+          </button>
+          <button id="btnMasterExportAll" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 shadow-sm">
+            <i class="fa-solid fa-download"></i>
+            <span>Export Database Dump (JSON)</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 10: GOVERNANCE & SETTINGS -->
+    <!-- ===================================================================== -->
+    <div id="tabViewSettings" class="hidden space-y-6">
+      
+      <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+        <h3 class="text-sm font-bold text-slate-900">Governance &amp; GPS Geofencing Policies</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">GPS Validation Tolerance (Meters)</label>
+            <input type="number" id="settingGpsTolerance" value="100" class="w-full bg-white p-2.5 rounded-xl border border-slate-300" />
+            <p class="text-[11px] text-slate-400 mt-1">Maximum allowed drift between visit log and registered merchant GPS</p>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Default Cloud Project ID</label>
+            <input type="text" id="settingProjectId" value="qr-friend-c4eb1" class="w-full bg-white p-2.5 rounded-xl border border-slate-300 font-mono" readonly />
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 11: AUDIT TRAIL -->
+    <!-- ===================================================================== -->
+    <div id="tabViewAudit" class="hidden space-y-4">
+      <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">System Security &amp; Audit Trail</h2>
+          <p class="text-xs text-slate-400">Immutable ledger of all actions, validations, and bulk uploads</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto max-h-96">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-slate-700 uppercase font-bold text-[11px] border-b border-slate-200 sticky top-0">
+              <tr>
+                <th class="py-3 px-4">Timestamp</th>
+                <th class="py-3 px-4">Action</th>
+                <th class="py-3 px-4">Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogsTableBody" class="divide-y divide-slate-100 font-mono text-[11px]">
+              <!-- Rendered by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL DIALOGS -->
+  <!-- ===================================================================== -->
+
+    <!-- ===================================================================== -->
+  <!-- MODAL: CREATE USER CREDENTIALS & HIERARCHY (Requirement 2 & 3) -->
+  <!-- ===================================================================== -->
+  <div id="createUserModal" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="bg-gradient-to-r from-slate-900 to-indigo-950 p-6 text-white relative">
+        <button id="btnCloseCreateUserModal" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+        <div class="flex items-center space-x-3">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 text-xl">
+            <i class="fa-solid fa-user-plus"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold">Provision New Field Force Account</h3>
+            <p class="text-xs text-indigo-200">Creates Firebase Auth record & Firestore /users mapping</p>
+          </div>
+        </div>
+      </div>
+
+      <form id="formCreateUser" class="p-6 space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Username (UID) *</label>
+            <input type="text" id="newUsername" placeholder="e.g. bdo_isb05" required
+              class="w-full bg-slate-50 p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+            <input type="text" id="newFullName" placeholder="e.g. Kamran Malik" required
+              class="w-full bg-slate-50 p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Role Hierarchy *</label>
+            <select id="newUserRole" class="w-full bg-slate-50 p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold">
+              <option value="BDO">🚶 BDO (Field Sales Officer)</option>
+              <option value="TL">📋 TL (Team Lead)</option>
+              <option value="ASM">👔 ASM (Area Sales Manager)</option>
+              <option value="ADMIN">🛡️ ADMIN (Operations Administrator)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Password</label>
+            <input type="password" id="newUserPassword" placeholder="Default: Bdo@12345"
+              class="w-full bg-slate-50 p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Assigned Team (TL)</label>
+            <select id="newUserTeamId" class="w-full bg-slate-50 p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="team_north_01">Alpha Field Force (North)</option>
+              <option value="team_south_02">South Tigers (Sindh)</option>
+              <option value="team_central_03">Central Lions (Punjab)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Assigned Area (ASM)</label>
+            <select id="newUserAreaId" class="w-full bg-slate-50 p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="area_north">Federal & North Territory</option>
+              <option value="area_south">Sindh Coastal Division</option>
+              <option value="area_central">Punjab Central Heartland</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Mobile Contact</label>
+            <input type="text" id="newUserMobile" placeholder="+92-300-1234567"
+              class="w-full bg-slate-50 p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Monthly Visit Targets</label>
+            <input type="number" id="newUserTarget" value="50" min="1"
+              class="w-full bg-slate-50 p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
+          </div>
+        </div>
+
+        <div class="pt-3 flex items-center justify-end space-x-2">
+          <button type="button" id="btnCancelCreateUser" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="btnSubmitCreateUser" class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center space-x-2">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Provision User Account</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<!-- MODAL 1: MASTER LOGIN / UNLOCK MODAL -->
+  <div id="masterLoginModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="bg-slate-900 p-6 text-white text-center relative">
+        <button id="btnCloseMasterLogin" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+        <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto text-2xl mb-2 border border-amber-500/30">
+          <i class="fa-solid fa-crown"></i>
+        </div>
+        <h3 class="text-base font-bold">Unlock Master ID All-Access</h3>
+        <p class="text-xs text-slate-400 mt-1">Super-Administrator credentials or instant demo unlock</p>
+      </div>
+      <form id="masterLoginForm" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Master Password</label>
+          <input type="password" id="inputMasterPassword" placeholder="Master@12345 or master" class="w-full bg-slate-50 p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div class="space-y-2 pt-2">
+          <button type="submit" class="w-full py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition-all">
+            Unlock Master Access
+          </button>
+          <!-- 1-Click Instant Unlock (eliminates any barrier for users) -->
+          <button type="button" id="btnInstantMasterUnlock" class="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors flex items-center justify-center space-x-1.5">
+            <i class="fa-solid fa-bolt text-amber-600"></i>
+            <span>Instant Demo Master Access (1-Click)</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: MASTER DETAIL MODAL (Fixed & Fully Functional) -->
+  <div id="masterDetailModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-violet-950 p-6 text-white relative">
+        <button id="btnCloseMasterDetailModal" class="absolute top-4 right-4 text-white/70 hover:text-white p-1 rounded-lg">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+        <div class="flex items-center space-x-4">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 text-2xl font-black shadow-lg shadow-amber-400/30 flex-shrink-0">
+            <i class="fa-solid fa-crown"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h2 class="text-lg font-bold">Master Administrator</h2>
+              <span class="text-[10px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full font-mono font-bold uppercase">Super-Admin</span>
+            </div>
+            <p class="text-xs text-indigo-200 font-mono">Employee ID: MST-001 &bull; master@qrfriend.internal</p>
+            <div class="inline-flex items-center space-x-1.5 mt-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>All-Access Session Active</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="p-6 space-y-4 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <div class="text-[10px] text-slate-400 font-bold uppercase">Authorization Level</div>
+            <div class="text-sm font-bold text-slate-800 mt-0.5">Tier 0 (Root Master)</div>
+            <div id="masterModalHierarchyCounts" class="text-[11px] text-indigo-600 font-semibold mt-1">3 Areas • 3 Teams • 4 BDOs</div>
+          </div>
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <div class="text-[10px] text-slate-400 font-bold uppercase">Cloud Endpoint</div>
+            <div class="text-sm font-bold text-indigo-600 mt-0.5 font-mono truncate">Live Cloud Run</div>
+            <div id="masterModalUptime" class="text-[11px] text-emerald-600 font-semibold mt-1">Operational & Synchronized</div>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <div class="font-bold text-slate-800 text-xs">Granted Super-Admin Rights:</div>
+          <ul class="space-y-1.5 text-slate-600">
+            <li class="flex items-center space-x-2"><i class="fa-solid fa-check-circle text-emerald-500"></i><span>Role-Based Access Control (RBAC) Hierarchy Management</span></li>
+            <li class="flex items-center space-x-2"><i class="fa-solid fa-check-circle text-emerald-500"></i><span>Real-Time BDO Live GPS Location Streaming Inspection</span></li>
+            <li class="flex items-center space-x-2"><i class="fa-solid fa-check-circle text-emerald-500"></i><span>Visit Verification &amp; TL Approval Overrides with Feedback</span></li>
+            <li class="flex items-center space-x-2"><i class="fa-solid fa-check-circle text-emerald-500"></i><span>Bulk Merchant Spreadsheet Upload (.xlsx / .csv) with Full Address</span></li>
+            <li class="flex items-center space-x-2"><i class="fa-solid fa-check-circle text-emerald-500"></i><span>Attendance &amp; Working Hours Shift Auditing</span></li>
+          </ul>
+        </div>
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+          <button id="btnMasterDetailGoSettings" class="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl border border-indigo-200 transition-colors">
+            <i class="fa-solid fa-gear mr-1"></i> Governance Settings
+          </button>
+          <button id="btnMasterDetailLock" class="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl border border-rose-200 transition-colors">
+            <i class="fa-solid fa-lock mr-1"></i> Lock Session
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: VISIT DISPATCH CREATION WITH MEDIA STREAMING (Requirement 1) -->
+  <div id="visitDispatchModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="bg-slate-900 p-5 text-white flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-base">
+            <i class="fa-solid fa-camera"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold">Log New Field Visit Dispatch</h3>
+            <p class="text-[11px] text-slate-400">Stream photo to cloud storage &amp; capture GPS coordinates</p>
+          </div>
+        </div>
+        <button id="btnCloseVisitModal" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <form id="visitDispatchForm" class="p-5 space-y-3.5 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Target Merchant</label>
+          <select id="visitMerchantSelect" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <!-- Populated by app.js -->
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Visit Purpose</label>
+            <select id="visitPurposeSelect" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300">
+              <option value="QR Deployment">QR Deployment</option>
+              <option value="Onboarding">Merchant Onboarding</option>
+              <option value="Merchant Support">Merchant Support</option>
+              <option value="Stock Audit">Stock Audit</option>
+              <option value="Revisit">Scheduled Revisit</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Reporting BDO</label>
+            <input type="text" id="visitBdoInput" value="bdo_ni07" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Latitude</label>
+            <input type="number" step="any" id="visitLatInput" value="33.7225" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Longitude</label>
+            <input type="number" step="any" id="visitLngInput" value="73.0532" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Photo Attachment (Camera / Upload)</label>
+          <input type="file" id="visitPhotoFileInput" accept="image/*" class="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+          <div id="visitPhotoPreviewContainer" class="mt-2 hidden">
+            <img id="visitPhotoPreview" src="" alt="Photo preview" class="w-full h-32 object-cover rounded-xl border border-slate-200" />
+          </div>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Field Notes &amp; Observations</label>
+          <textarea id="visitNotesInput" rows="2" placeholder="Standee placed on checkout counter..." class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300"></textarea>
+        </div>
+        <div class="pt-2 flex justify-end space-x-2">
+          <button type="button" id="btnCancelVisitModal" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-md flex items-center space-x-1.5">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span>Submit Dispatch</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 4: VISIT VERIFICATION REVIEW & APPROVAL (Requirement 5) -->
+  <div id="visitReviewModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="bg-slate-900 p-5 text-white flex items-center justify-between">
+        <h3 class="text-sm font-bold" id="reviewModalTitle">Validate Visit Dispatch</h3>
+        <button id="btnCloseReviewModal" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-4 text-xs">
+        <div id="reviewPhotoContainer" class="w-full h-44 bg-slate-100 rounded-2xl overflow-hidden border border-slate-200">
+          <img id="reviewPhotoImg" src="" alt="Visit Photo" class="w-full h-full object-cover" />
+        </div>
+        <div class="space-y-1">
+          <div class="text-base font-bold text-slate-900" id="reviewMerchantName">Al-Madina Super Store</div>
+          <div class="text-slate-500" id="reviewBdoName">Officer: Naseem Ilyas &bull; 45 mins ago</div>
+          <div class="font-mono text-slate-400" id="reviewGpsCoords">GPS: 33.7225, 73.0532</div>
+        </div>
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-slate-700" id="reviewNotes">
+          Notes
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Supervisor Feedback / Validation Note</label>
+          <textarea id="reviewFeedbackInput" rows="2" placeholder="Placement confirmed, clean photo..." class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300"></textarea>
+        </div>
+        <div class="flex items-center justify-end space-x-2 pt-2">
+          <button id="btnRejectVisit" class="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl border border-rose-200 flex items-center space-x-1.5">
+            <i class="fa-solid fa-xmark"></i>
+            <span>Reject Visit</span>
+          </button>
+          <button id="btnApproveVisit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md flex items-center space-x-1.5">
+            <i class="fa-solid fa-check"></i>
+            <span>Approve &amp; Validate</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: ADD / EDIT MERCHANT WITH EXPANDED FULL ADDRESS (Requirement 8) -->
+  <div id="merchantModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+      <div class="bg-slate-900 p-5 text-white flex items-center justify-between flex-shrink-0">
+        <h3 class="text-sm font-bold" id="merchantModalTitle">Add New Merchant</h3>
+        <button id="btnCloseMerchantModal" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <form id="merchantForm" class="p-5 space-y-3.5 text-xs overflow-y-auto flex-1">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Merchant ID</label>
+            <input type="text" id="inputMerchantId" required placeholder="M1011" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300 font-mono" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Store / Business Name</label>
+            <input type="text" id="inputMerchantName" required placeholder="Rawal General Mart" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Store Type / Category</label>
+            <input type="text" id="inputMerchantCategory" placeholder="Grocery &amp; Supermarket" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">QR Code Standee ID</label>
+            <input type="text" id="inputMerchantQrCode" placeholder="QR-ISB-1011" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300 font-mono" />
+          </div>
+        </div>
+        <!-- Required Full Address Fields -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Full Street Address <span class="text-rose-500">*</span></label>
+          <input type="text" id="inputMerchantStreetAddress" required placeholder="Shop 14, Commercial Center, Sector G-10 Markaz" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Landmark</label>
+            <input type="text" id="inputMerchantLandmark" placeholder="Near Bank Al-Habib" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Area / Locality</label>
+            <input type="text" id="inputMerchantArea" placeholder="Sector G-10" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">City</label>
+            <input type="text" id="inputMerchantCity" placeholder="Islamabad" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Contact Person</label>
+            <input type="text" id="inputMerchantContactPerson" placeholder="Muhammad Aslam" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Mobile Number</label>
+            <input type="text" id="inputMerchantMobile" placeholder="+92-300-1234567" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">GPS Latitude</label>
+            <input type="number" step="any" id="inputMerchantLatitude" value="33.7225" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300 font-mono" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">GPS Longitude</label>
+            <input type="number" step="any" id="inputMerchantLongitude" value="73.0532" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300 font-mono" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Assigned BDO</label>
+            <select id="inputMerchantBdoUid" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Status</label>
+            <select id="inputMerchantStatus" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300">
+              <option value="Active">Active</option>
+              <option value="Pending">Pending</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Operational Notes</label>
+          <textarea id="inputMerchantNotes" rows="2" placeholder="Soundbox installed, dual counter placement." class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300"></textarea>
+        </div>
+        <div class="pt-2 flex justify-end space-x-2">
+          <button type="button" id="btnCancelMerchantModal" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md">Save Merchant</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 6: ADD BDO OFFICER -->
+  <div id="bdoModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="bg-slate-900 p-5 text-white flex items-center justify-between">
+        <h3 class="text-sm font-bold">Register Field Officer (BDO)</h3>
+        <button id="btnCloseBdoModal" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <form id="bdoForm" class="p-5 space-y-3.5 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Username / UID</label>
+          <input type="text" id="inputBdoUsername" required placeholder="bdo_isb05" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300 font-mono" />
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Full Name</label>
+          <input type="text" id="inputBdoName" required placeholder="Kamran Akmal" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Assigned Territory / Region</label>
+          <input type="text" id="inputBdoRegion" value="North Region" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Monthly Target Onboardings</label>
+          <input type="number" id="inputBdoTarget" value="50" class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-300" />
+        </div>
+        <div class="pt-2 flex justify-end space-x-2">
+          <button type="button" id="btnCancelBdoModal" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-md">Create Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
+
+  <!-- SCRIPTS WITH CACHE-BUSTING QUERY -->
+  <script src="charts.js?v=2.5.0"></script>
+  <script type="module" src="app.js?v=2.5.0"></script>
+</body>
+</html>

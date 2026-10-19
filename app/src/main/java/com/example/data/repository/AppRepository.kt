@@ -244,8 +244,13 @@ class AppRepository(private val db: AppDatabase) {
         val effectiveQrDeployed = isQualified || (qrDeployed && transactionAmount >= 6000.0)
         val deploymentTatStatus = if (isQualified) "Within TAT" else "Due"
 
+        // Requirement 3: Deduplication check prior to insertion
+        val existingVisit = db.visitDao().findExistingVisit(merchant.merchantId, bdoUser.id, today)
+        val canonicalDocId = "${merchant.merchantId}_${today}_${bdoUser.id}"
+
         val visit = VisitEntity(
-            visitIdStr = visitIdStr,
+            id = existingVisit?.id ?: 0L, // Re-use existing row ID if already submitted
+            visitIdStr = canonicalDocId,
             merchantId = merchant.merchantId,
             merchantName = merchant.businessName.ifBlank { merchant.merchantName },
             bdoId = bdoUser.id,
@@ -285,10 +290,20 @@ class AppRepository(private val db: AppDatabase) {
             isSynced = isOnline
         )
 
-        val visitId = db.visitDao().insertVisit(visit)
+        val visitId = if (existingVisit != null) {
+            db.visitDao().updateVisit(visit)
+            existingVisit.id
+        } else {
+            db.visitDao().insertVisit(visit)
+        }
         val createdVisit = visit.copy(id = visitId)
-        // Automatic real-time sync to cloud (or queued offline if disconnected)
-        CloudSyncManager.recordVisitToCloud(createdVisit)
+        // Automatic real-time sync to cloud wrapped in safe try/catch
+        try {
+            android.util.Log.i("AppRepository", "Syncing visit ${createdVisit.visitIdStr} to Cloud Firestore...")
+            CloudSyncManager.recordVisitToCloud(createdVisit)
+        } catch (cloudErr: Throwable) {
+            android.util.Log.e("AppRepository", "Non-blocking Cloud Firestore sync error: ${cloudErr.message}", cloudErr)
+        }
 
         // Update Merchant status and QR status according to Rule
         val newQrStatus = if (effectiveQrDeployed) "Deployed" else "At Hand"

@@ -7,6 +7,17 @@ import android.graphics.Bitmap
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.util.Log
+import android.widget.Toast
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.tasks.await
+import org.json.JSONObject
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import android.os.Bundle
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -147,6 +158,7 @@ fun BdoVisitScreen(
     var currentLat by remember { mutableDoubleStateOf(0.0) }
     var currentLon by remember { mutableDoubleStateOf(0.0) }
     var currentAccuracy by remember { mutableFloatStateOf(0.0f) }
+    var isSubmitting by remember { mutableStateOf(false) }
     var locationCaptureTime by remember { mutableStateOf("") }
 
     // Real Camera States
@@ -166,73 +178,76 @@ fun BdoVisitScreen(
     val coroutineScope = rememberCoroutineScope()
     val locationService = remember { LocationService(context) }
 
-    // Function to acquire real device location using FusedLocationProviderClient
+    val fusedLocationClient: FusedLocationProviderClient = remember {
+        LocationServices.getFusedLocationProviderClient(context)
+    }
+
+    // Function to acquire real device location using modern FusedLocationProviderClient
     fun fetchRealDeviceLocation() {
         isAcquiringGps = true
         locationError = null
         coroutineScope.launch {
             try {
-                val loc = locationService.getCurrentLocation()
-                if (loc != null) {
-                    currentLat = loc.latitude
-                    currentLon = loc.longitude
-                    currentAccuracy = loc.accuracy
-                    locationCaptureTime = DateUtils.formatTime(loc.time)
-                    locationCaptured = true
-                    isAcquiringGps = false
-                } else {
-                    // Fallback to LocationManager if Google Play Services fails
-                    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-                    val isGpsEnabled = locationManager?.isProviderEnabled(LocationManager.GPS_PROVIDER) ?: false
-                    val isNetworkEnabled = locationManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ?: false
+                val cts = CancellationTokenSource()
+                // 1. Fetch single fresh location snapshot with Priority.PRIORITY_HIGH_ACCURACY
+                var fix: Location? = try {
+                    fusedLocationClient.getCurrentLocation(
+                        Priority.PRIORITY_HIGH_ACCURACY,
+                        cts.token
+                    ).await()
+                } catch (e: Exception) {
+                    Log.w("BdoVisitScreen", "getCurrentLocation high-accuracy timed out/failed: ${e.message}")
+                    null
+                }
 
-                    if (!isGpsEnabled && !isNetworkEnabled) {
-                        locationError = "Device GPS / Location is turned off. Please enable device location."
-                        isAcquiringGps = false
-                        return@launch
-                    }
-
-                    var fallbackLoc: Location? = null
-                    if (isGpsEnabled) {
-                        fallbackLoc = locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                    }
-                    if (fallbackLoc == null && isNetworkEnabled) {
-                        fallbackLoc = locationManager?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                    }
-
-                    if (fallbackLoc != null) {
-                        currentLat = fallbackLoc.latitude
-                        currentLon = fallbackLoc.longitude
-                        currentAccuracy = fallbackLoc.accuracy
-                        locationCaptureTime = DateUtils.formatTime(fallbackLoc.time)
-                        locationCaptured = true
-                        isAcquiringGps = false
-                    } else {
-                        val listener = object : LocationListener {
-                            override fun onLocationChanged(newLoc: Location) {
-                                currentLat = newLoc.latitude
-                                currentLon = newLoc.longitude
-                                currentAccuracy = newLoc.accuracy
-                                locationCaptureTime = DateUtils.formatTime(newLoc.time)
-                                locationCaptured = true
-                                isAcquiringGps = false
-                                locationManager?.removeUpdates(this)
-                            }
-                            @Deprecated("Deprecated in Java")
-                            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-                            override fun onProviderEnabled(provider: String) {}
-                            override fun onProviderDisabled(provider: String) {}
-                        }
-                        val provider = if (isGpsEnabled) LocationManager.GPS_PROVIDER else LocationManager.NETWORK_PROVIDER
-                        locationManager?.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+                // 2. Indoor / Weak Signal Fallback: lastLocation
+                if (fix == null) {
+                    fix = try {
+                        fusedLocationClient.lastLocation.await()
+                    } catch (e: Exception) {
+                        Log.w("BdoVisitScreen", "lastLocation fallback failed: ${e.message}")
+                        null
                     }
                 }
+
+                // 3. Fallback to LocationManager if Google Play Services returned null
+                if (fix == null) {
+                    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                    if (locationManager != null) {
+                        if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                            fix = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                        }
+                        if (fix == null && locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                            fix = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                        }
+                    }
+                }
+
+                if (fix != null) {
+                    currentLat = fix.latitude
+                    currentLon = fix.longitude
+                    currentAccuracy = fix.accuracy
+                    locationCaptureTime = DateUtils.formatTime(fix.time)
+                    locationCaptured = true
+                    isAcquiringGps = false
+                    Log.d("BdoVisitScreen", "GPS successfully acquired: lat=$currentLat, lng=$currentLon, acc=$currentAccuracy")
+                    Toast.makeText(context, "GPS Locked: ±${currentAccuracy.toInt()}m accuracy", Toast.LENGTH_SHORT).show()
+                } else {
+                    locationError = "Could not obtain GPS fix. Please ensure device location is enabled and try again."
+                    isAcquiringGps = false
+                    Log.e("BdoVisitScreen", "GPS acquisition returned null fix")
+                    Toast.makeText(context, "GPS Error: Unable to obtain location fix", Toast.LENGTH_LONG).show()
+                }
             } catch (e: SecurityException) {
-                locationError = "Location access denied: ${e.localizedMessage}"
+                locationError = "Location permission denied: ${e.localizedMessage}"
                 isAcquiringGps = false
+                Log.e("BdoVisitScreen", "Location permission security exception", e)
+                Toast.makeText(context, "Permission Denied: Location access required", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 locationError = "Could not capture GPS fix: ${e.localizedMessage}"
                 isAcquiringGps = false
+                Log.e("BdoVisitScreen", "Failed to acquire location", e)
+                Toast.makeText(context, "GPS Error: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -263,7 +278,14 @@ fun BdoVisitScreen(
     ) { bitmap ->
         if (bitmap != null) {
             shopPhotoBitmap = bitmap
-            shopPhotoPath = "shop_${merchant.merchantId}_${System.currentTimeMillis()}.jpg"
+            try {
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 88, outputStream)
+                val base64String = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
+                shopPhotoPath = "data:image/jpeg;base64,$base64String"
+            } catch (e: Exception) {
+                shopPhotoPath = "shop_${merchant.merchantId}_${System.currentTimeMillis()}.jpg"
+            }
         }
     }
 
@@ -1014,8 +1036,10 @@ fun BdoVisitScreen(
             val canSubmit = locationCaptured && (shopPhotoBitmap != null)
 
             Button(
-                onClick = { showConfirmDialog = true },
-                enabled = canSubmit,
+                onClick = {
+                    if (!isSubmitting) showConfirmDialog = true
+                },
+                enabled = canSubmit && !isSubmitting,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
@@ -1163,24 +1187,101 @@ fun BdoVisitScreen(
             },
             confirmButton = {
                 Button(
+                    enabled = !isSubmitting,
                     onClick = {
+                        if (isSubmitting) return@Button
+                        isSubmitting = true
                         showConfirmDialog = false
-                        onSubmitVisit(
-                            merchant.merchantId,
-                            selectedVisitType,
-                            currentLat,
-                            currentLon,
-                            currentAccuracy,
-                            shopPhotoPath,
-                            qrDeployed,
-                            if (qrDeployed) "" else qrNotDeployedReason,
-                            selectedMerchantStatus,
-                            paymentDiscussion,
-                            selectedMerchantResponse,
-                            comments,
-                            followUpRequired,
-                            followUpDate
-                        )
+                        try {
+                            Log.i("BdoVisitScreen", "Initiating visit submission for merchant: ${merchant.merchantId}")
+
+                            // 1. Safe Image Processing: Fallback gracefully to empty string if image is null/corrupt
+                            var resolvedPhotoPayload = ""
+                            try {
+                                if (shopPhotoPath.isNotBlank()) {
+                                    resolvedPhotoPayload = shopPhotoPath
+                                } else if (shopPhotoBitmap != null) {
+                                    val baos = java.io.ByteArrayOutputStream()
+                                    val maxDim = 1440
+                                    val origW = shopPhotoBitmap!!.width
+                                    val origH = shopPhotoBitmap!!.height
+                                    val scaledBitmap = if (origW > maxDim || origH > maxDim) {
+                                        if (origW > origH) {
+                                            Bitmap.createScaledBitmap(shopPhotoBitmap!!, maxDim, (maxDim.toFloat() * origH / origW).toInt(), true)
+                                        } else {
+                                            Bitmap.createScaledBitmap(shopPhotoBitmap!!, (maxDim.toFloat() * origW / origH).toInt(), maxDim, true)
+                                        }
+                                    } else {
+                                        shopPhotoBitmap!!
+                                    }
+                                    scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 88, baos)
+                                    val b64 = android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP)
+                                    resolvedPhotoPayload = "data:image/jpeg;base64,$b64"
+                                    Log.i("BdoVisitScreen", "Image payload encoded successfully (${baos.size()} bytes)")
+                                } else {
+                                    Log.w("BdoVisitScreen", "No photo captured; proceeding with text record")
+                                }
+                            } catch (imgErr: Throwable) {
+                                Log.e("BdoVisitScreen", "Error compressing image; continuing with text record: ${imgErr.message}", imgErr)
+                                resolvedPhotoPayload = ""
+                            }
+
+                            // 2. Transmit event-driven telemetry asynchronously without blocking DB write
+                            coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                try {
+                                    val bdoCode = bdoUser.employeeId.ifEmpty { bdoUser.username }
+                                    val payload = JSONObject().apply {
+                                        put("userId", bdoUser.username)
+                                        put("user_name", bdoUser.name)
+                                        put("bdoCode", bdoCode)
+                                        put("userCode", bdoCode)
+                                        put("employeeId", bdoUser.employeeId)
+                                        put("latitude", currentLat)
+                                        put("longitude", currentLon)
+                                        put("accuracy", currentAccuracy)
+                                        put("eventType", "VISIT_DISPATCH")
+                                        put("timestamp", System.currentTimeMillis())
+                                    }
+                                    val url = URL("http://192.168.43.122:8080/api/locations")
+                                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                                        requestMethod = "POST"
+                                        setRequestProperty("Content-Type", "application/json")
+                                        setRequestProperty("x-user-id", bdoUser.username)
+                                        doOutput = true
+                                        connectTimeout = 3000
+                                        readTimeout = 3000
+                                    }
+                                    OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+                                    val code = conn.responseCode
+                                    conn.disconnect()
+                                    Log.d("BdoVisitScreen", "Telemetry dispatched, response=$code")
+                                } catch (e: Throwable) {
+                                    Log.w("BdoVisitScreen", "Telemetry dispatch note: ${e.message}")
+                                }
+                            }
+
+                            // 3. Primary Visit Submission: Write text and photo record to database & Firestore
+                            onSubmitVisit(
+                                merchant.merchantId,
+                                selectedVisitType,
+                                currentLat,
+                                currentLon,
+                                currentAccuracy,
+                                resolvedPhotoPayload,
+                                qrDeployed,
+                                if (qrDeployed) "" else qrNotDeployedReason,
+                                selectedMerchantStatus,
+                                paymentDiscussion,
+                                selectedMerchantResponse,
+                                comments,
+                                followUpRequired,
+                                followUpDate
+                            )
+                            Log.i("BdoVisitScreen", "Visit record dispatched to repository & Firestore successfully")
+                        } catch (submitErr: Throwable) {
+                            Log.e("BdoVisitScreen", "CRITICAL: Visit submission pipeline failed: ${submitErr.message}", submitErr)
+                            isSubmitting = false
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ButtonPrimaryBg,

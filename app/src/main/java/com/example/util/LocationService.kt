@@ -3,7 +3,9 @@ package com.example.util
 import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
+import android.os.Build
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -15,11 +17,16 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
 /**
- * Production LocationService using Google Play Services FusedLocationProviderClient.
- * Accurately captures and logs high-precision GPS coordinates when a field agent visits a merchant location.
+ * Enterprise LocationService for BDO Real-Time GPS Telemetry.
+ * Enforces:
+ * 1. High Accuracy FusedLocationProviderClient updates.
+ * 2. Mobile Hardware Anti-Mock / Spoofing Detection.
+ * 3. Freshness validation (rejects stale cached fixes > 30s).
+ * 4. Accuracy radius gating (<= 30 meters).
  */
 class LocationService(private val context: Context) {
 
@@ -28,26 +35,63 @@ class LocationService(private val context: Context) {
 
     companion object {
         private const val TAG = "LocationService"
-        private const val FRESHNESS_THRESHOLD_MS = 60_000L // 1 minute
+        const val MAX_ACCURACY_RADIUS_METERS = 30.0f
+        const val FRESHNESS_THRESHOLD_MS = 30_000L // 30 seconds max age
     }
 
     /**
-     * Captures the best available current location with HIGH_ACCURACY priority.
-     * Checks lastKnownLocation first if fresh, otherwise requests a fresh single update.
+     * Inspects a location fix to ensure it is authentic, highly accurate, and fresh.
+     * Returns null if mock GPS, stale cache, or inaccurate radius is detected.
+     */
+    fun validateLocationTelemetry(location: Location?): Location? {
+        if (location == null) return null
+
+        // 1. Detect Mock Locations (Android 12+ API 31+ / Legacy)
+        val isMock = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            location.isMock
+        } else {
+            @Suppress("DEPRECATION")
+            location.isFromMockProvider
+        }
+        if (isMock) {
+            Log.w(TAG, "Mock/Spoofed location provider detected. Dropping ping.")
+            return null
+        }
+
+        // 2. Enforce High Accuracy Radius Threshold (<= 30 meters)
+        if (!location.hasAccuracy() || location.accuracy > MAX_ACCURACY_RADIUS_METERS) {
+            Log.w(TAG, "Inaccurate GPS fix dropped: accuracy=${location.accuracy}m (Threshold: 30m)")
+            return null
+        }
+
+        // 3. Stale Cached Signal Rejection (Age <= 30 seconds from device clock)
+        val locationAgeMs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000L
+        } else {
+            System.currentTimeMillis() - location.time
+        }
+        if (locationAgeMs > FRESHNESS_THRESHOLD_MS) {
+            Log.w(TAG, "Stale cached fix dropped ($locationAgeMs ms old). Threshold: $FRESHNESS_THRESHOLD_MS ms")
+            return null
+        }
+
+        return location
+    }
+
+    /**
+     * Captures a single validated, high-accuracy location fix.
      */
     @SuppressLint("MissingPermission")
     suspend fun getCurrentLocation(): Location? {
         return suspendCancellableCoroutine { continuation ->
             try {
-                // Try last known location first for immediate response
+                // Try last known location first if authentic and fresh
                 fusedLocationClient.lastLocation
                     .addOnSuccessListener { lastLoc: Location? ->
-                        val isFresh = lastLoc != null &&
-                                (System.currentTimeMillis() - lastLoc.time) < FRESHNESS_THRESHOLD_MS
-
-                        if (isFresh && lastLoc != null) {
-                            Log.d(TAG, "Using fresh lastLocation: ${lastLoc.latitude}, ${lastLoc.longitude}, acc=${lastLoc.accuracy}m")
-                            if (continuation.isActive) continuation.resume(lastLoc)
+                        val validated = validateLocationTelemetry(lastLoc)
+                        if (validated != null) {
+                            Log.d(TAG, "Using verified fresh lastLocation: ${validated.latitude}, ${validated.longitude}, acc=${validated.accuracy}m")
+                            if (continuation.isActive) continuation.resume(validated)
                         } else {
                             // Request a fresh high-accuracy location fix
                             val locationRequest = LocationRequest.Builder(
@@ -61,11 +105,12 @@ class LocationService(private val context: Context) {
 
                             val callback = object : LocationCallback() {
                                 override fun onLocationResult(result: LocationResult) {
-                                    val location = result.lastLocation ?: lastLoc
-                                    Log.d(TAG, "FusedLocationProvider fix obtained: ${location?.latitude}, ${location?.longitude}, acc=${location?.accuracy}m")
+                                    val candidate = result.lastLocation ?: lastLoc
+                                    val validFix = validateLocationTelemetry(candidate)
+                                    Log.d(TAG, "FusedLocationProvider fix obtained: ${validFix?.latitude}, ${validFix?.longitude}, acc=${validFix?.accuracy}m")
                                     fusedLocationClient.removeLocationUpdates(this)
                                     if (continuation.isActive) {
-                                        continuation.resume(location)
+                                        continuation.resume(validFix)
                                     }
                                 }
                             }
@@ -75,9 +120,9 @@ class LocationService(private val context: Context) {
                                 callback,
                                 Looper.getMainLooper()
                             ).addOnFailureListener { exc ->
-                                Log.e(TAG, "requestLocationUpdates failed, falling back to lastLoc", exc)
+                                Log.e(TAG, "requestLocationUpdates failed", exc)
                                 fusedLocationClient.removeLocationUpdates(callback)
-                                if (continuation.isActive) continuation.resume(lastLoc)
+                                if (continuation.isActive) continuation.resume(null)
                             }
 
                             continuation.invokeOnCancellation {
@@ -100,21 +145,26 @@ class LocationService(private val context: Context) {
     }
 
     /**
-     * Flow of continuous location updates for live tracking during merchant visits.
+     * Continuous stream of validated, high-accuracy GPS pings for live duty tracking.
      */
     @SuppressLint("MissingPermission")
-    fun getLocationUpdates(intervalMs: Long = 5000L): Flow<Location> = callbackFlow {
+    fun getLocationUpdates(intervalMs: Long = 15000L): Flow<Location> = callbackFlow {
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
             intervalMs
         ).apply {
-            setMinUpdateIntervalMillis(intervalMs / 2)
+            setMinUpdateIntervalMillis(TimeUnit.SECONDS.toMillis(10))
+            setMinUpdateDistanceMeters(10.0f) // Minimum 10 meters displacement
+            setMaxUpdateDelayMillis(TimeUnit.SECONDS.toMillis(30))
         }.build()
 
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { location ->
-                    trySend(location)
+                result.lastLocation?.let { rawLoc ->
+                    val validLoc = validateLocationTelemetry(rawLoc)
+                    if (validLoc != null) {
+                        trySend(validLoc)
+                    }
                 }
             }
         }

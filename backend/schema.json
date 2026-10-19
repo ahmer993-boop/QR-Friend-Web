@@ -1,0 +1,120 @@
+{
+  "database": "Cloud Firestore / Enterprise MongoDB",
+  "collections": {
+    "users": {
+      "description": "User profiles across BDO, TL, ASM, ADMIN, and MASTER roles",
+      "fields": {
+        "uid": "String (Primary Key)",
+        "username": "String",
+        "email": "String",
+        "name": "String",
+        "role": "Enum: ['BDO', 'TL', 'ASM', 'ADMIN', 'MASTER']",
+        "team_id": "String (nullable)",
+        "area_id": "String (nullable)",
+        "region": "String",
+        "assigned_targets": "Number",
+        "status": "Enum: ['Active', 'Inactive', 'Suspended']",
+        "updated_at": "Timestamp"
+      }
+    },
+    "teams": {
+      "description": "Team definitions led by Team Leads (TL)",
+      "fields": {
+        "team_id": "String (Primary Key)",
+        "team_name": "String",
+        "tl_uid": "String (Foreign key to users.uid)",
+        "area_id": "String (Foreign key to areas.area_id)",
+        "target_visits_monthly": "Number"
+      }
+    },
+    "areas": {
+      "description": "Area divisions supervised by Area Sales Managers (ASM)",
+      "fields": {
+        "area_id": "String (Primary Key)",
+        "area_name": "String",
+        "asm_uid": "String (Foreign key to users.uid)",
+        "region": "String"
+      }
+    },
+    "merchants": {
+      "description": "Onboarded merchants with full street addresses and GPS",
+      "fields": {
+        "merchant_id": "String (Primary Key)",
+        "merchant_name": "String",
+        "store_type": "String",
+        "merchant_category": "String",
+        "qr_code_id": "String",
+        "bdo_uid": "String",
+        "team_id": "String",
+        "area_id": "String",
+        "contact_person": "String",
+        "mobile_number": "String",
+        "street_address": "String",
+        "landmark": "String",
+        "area": "String",
+        "city": "String",
+        "latitude": "Number",
+        "longitude": "Number",
+        "operational_notes": "String",
+        "status": "Enum: ['Pending', 'Active', 'Rejected']",
+        "created_at": "Timestamp"
+      }
+    },
+    "visits": {
+      "description": "Field visit logs with photo attachments and verification workflow",
+      "fields": {
+        "id": "String (Primary Key)",
+        "visit_id": "String",
+        "bdo_uid": "String",
+        "merchant_id": "String",
+        "merchant_name": "String",
+        "team_id": "String",
+        "area_id": "String",
+        "timestamp": "Number",
+        "latitude": "Number",
+        "longitude": "Number",
+        "purpose": "String",
+        "notes": "String",
+        "photo_url": "String (Public Cloud URL / Base64 Data URL)",
+        "validation_status": "Enum: ['PENDING', 'APPROVED', 'REJECTED']",
+        "validated_by": "String (TL UID)",
+        "validated_at": "Timestamp",
+        "feedback": "String"
+      }
+    },
+    "attendance": {
+      "description": "Daily attendance logs, shift hours, and active statuses",
+      "fields": {
+        "id": "String (Primary Key)",
+        "user_uid": "String",
+        "user_name": "String",
+        "role": "String",
+        "team_id": "String",
+        "area_id": "String",
+        "date": "String (YYYY-MM-DD)",
+        "login_time": "Timestamp",
+        "logout_time": "Timestamp (nullable)",
+        "total_working_hours": "Number",
+        "active_status": "Enum: ['ONLINE', 'OFFLINE', 'ON_DUTY']",
+        "visits_conducted": "Number"
+      }
+    },
+    "live_locations": {
+      "description": "Real-time background GPS streaming coordinates for active field staff",
+      "fields": {
+        "id": "String",
+        "bdo_uid": "String",
+        "user_name": "String",
+        "team_id": "String",
+        "area_id": "String",
+        "latitude": "Number",
+        "longitude": "Number",
+        "accuracy": "Number",
+        "battery_level": "Number",
+        "is_online": "Boolean",
+        "timestamp": "Number",
+        "last_active_ping": "Timestamp"
+      }
+    }
+  }
+}

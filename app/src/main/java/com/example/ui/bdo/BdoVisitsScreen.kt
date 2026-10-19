@@ -2,38 +2,17 @@ package com.example.ui.bdo
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudQueue
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.QrCode
-import androidx.compose.material.icons.filled.Store
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,11 +27,34 @@ import com.example.ui.theme.*
 import com.example.util.DateUtils
 import com.example.util.GeoUtils
 
+enum class VisitFilterTab {
+    CONDUCTED,
+    PENDING
+}
+
 @Composable
 fun BdoVisitsScreen(
     visits: List<VisitEntity>,
-    merchants: List<MerchantEntity>
+    merchants: List<MerchantEntity>,
+    onStartVisit: ((MerchantEntity) -> Unit)? = null
 ) {
+    var selectedTab by remember { mutableStateOf(VisitFilterTab.CONDUCTED) }
+    val today = DateUtils.getTodayDateString()
+
+    // Tab A: "Today's Conducted Visits"
+    val conductedVisitsToday = remember(visits, today) {
+        visits.filter { it.visitDateString == today }
+    }
+
+    // Tab B: "Pending / Required Visits"
+    // Merchants assigned to BDO that have NOT yet been visited today
+    val visitedMerchantIdsToday = remember(conductedVisitsToday) {
+        conductedVisitsToday.map { it.merchantId }.toSet()
+    }
+    val pendingMerchants = remember(merchants, visitedMerchantIdsToday) {
+        merchants.filter { !visitedMerchantIdsToday.contains(it.merchantId) }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -69,34 +71,225 @@ fun BdoVisitsScreen(
         ) {
             Column {
                 Text(
-                    text = "My Field Visit History",
+                    text = "Field Visits & Tasks",
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.Bold,
                         color = TextHeadings
                     )
                 )
                 Text(
-                    text = "${visits.size} logged visits • Locked & verified records",
+                    text = "${conductedVisitsToday.size} completed today • ${pendingMerchants.size} pending remaining",
                     style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
                 )
             }
         }
 
-        if (visits.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        // Distinct Requirement 4 Tabs: Tab A (Today's Conducted Visits) vs Tab B (Pending / Required Visits)
+        TabRow(
+            selectedTabIndex = if (selectedTab == VisitFilterTab.CONDUCTED) 0 else 1,
+            containerColor = Color.White,
+            contentColor = BrandGreen,
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .border(BorderStroke(1.dp, BorderColor), RoundedCornerShape(12.dp))
+        ) {
+            Tab(
+                selected = selectedTab == VisitFilterTab.CONDUCTED,
+                onClick = { selectedTab = VisitFilterTab.CONDUCTED },
+                modifier = Modifier.testTag("tab_conducted_visits"),
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (selectedTab == VisitFilterTab.CONDUCTED) BrandGreen else TextSecondary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Today's Conducted (${conductedVisitsToday.size})",
+                            fontWeight = if (selectedTab == VisitFilterTab.CONDUCTED) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            )
+            Tab(
+                selected = selectedTab == VisitFilterTab.PENDING,
+                onClick = { selectedTab = VisitFilterTab.PENDING },
+                modifier = Modifier.testTag("tab_pending_visits"),
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.PendingActions,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (selectedTab == VisitFilterTab.PENDING) WarningOrange else TextSecondary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Pending / Required (${pendingMerchants.size})",
+                            fontWeight = if (selectedTab == VisitFilterTab.PENDING) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            )
+        }
+
+        // Content Display based on active Tab
+        when (selectedTab) {
+            VisitFilterTab.CONDUCTED -> {
+                if (conductedVisitsToday.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircleOutline,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "No visits completed yet today.",
+                                style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary, fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Switch to 'Pending' tab to choose and log assigned merchant visits.",
+                                style = MaterialTheme.typography.bodySmall.copy(color = TextMuted)
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(conductedVisitsToday, key = { it.id }) { visit ->
+                            val merchant = merchants.find { it.merchantId == visit.merchantId }
+                            BdoVisitHistoryCard(visit = visit, merchant = merchant)
+                        }
+                    }
+                }
+            }
+            VisitFilterTab.PENDING -> {
+                if (pendingMerchants.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = null,
+                                tint = BrandGreen,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "All required merchant visits completed today!",
+                                style = MaterialTheme.typography.bodyMedium.copy(color = TextHeadings, fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Great job! You have fulfilled today's visit roster.",
+                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(pendingMerchants, key = { it.merchantId }) { merchant ->
+                            BdoPendingMerchantCard(merchant = merchant, onStartVisit = onStartVisit)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BdoPendingMerchantCard(
+    merchant: MerchantEntity,
+    onStartVisit: ((MerchantEntity) -> Unit)?
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("pending_merchant_card_${merchant.merchantId}"),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardWhite),
+        border = BorderStroke(1.dp, BorderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(14.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "You have not submitted any visits yet today.",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                    text = merchant.shopName.ifBlank { merchant.businessName },
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = TextHeadings
+                    )
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${merchant.merchantId} • ${merchant.merchantCategory}",
+                    style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary)
+                )
+                Text(
+                    text = merchant.address.ifBlank { "Assigned Route Location" },
+                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted),
+                    maxLines = 1
                 )
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(visits, key = { it.id }) { visit ->
-                    val merchant = merchants.find { it.merchantId == visit.merchantId }
-                    BdoVisitHistoryCard(visit = visit, merchant = merchant)
+            if (onStartVisit != null) {
+                Button(
+                    onClick = { onStartVisit(merchant) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandGreen,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DirectionsWalk,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Visit", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Surface(
+                    color = WarningBg,
+                    shape = RoundedCornerShape(6.dp),
+                    border = BorderStroke(1.dp, Color(0xFFFDE68A))
+                ) {
+                    Text(
+                        text = "Pending",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = WarningOrange
+                        )
+                    )
                 }
             }
         }
@@ -127,7 +320,7 @@ fun BdoVisitHistoryCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = merchant?.shopName ?: visit.merchantId,
+                            text = merchant?.shopName ?: visit.merchantName.ifBlank { visit.merchantId },
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = TextHeadings
@@ -141,7 +334,6 @@ fun BdoVisitHistoryCard(
                         style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary)
                     )
                 }
-
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     // GPS status badge
                     val isGpsValid = visit.gpsStatus == "VALID"
@@ -159,7 +351,6 @@ fun BdoVisitHistoryCard(
                             )
                         )
                     }
-
                     // Verification status badge
                     val (vBg, vText, vBorder) = when (visit.verificationStatus) {
                         "Verified" -> Triple(SuccessBg, SuccessText, Color(0xFF86EFAC))
@@ -203,7 +394,6 @@ fun BdoVisitHistoryCard(
                         )
                     )
                 }
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = if (visit.isSynced) Icons.Default.CloudDone else Icons.Default.CloudQueue,

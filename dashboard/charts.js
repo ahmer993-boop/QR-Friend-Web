@@ -70,14 +70,14 @@ function initCharts() {
   }
 
   // 2. Merchant Status Breakdown (Doughnut Chart)
-  const ctxStatus = document.getElementById('merchantStatusChart')?.getContext('2d');
+  const ctxStatus = (document.getElementById('statusDoughnutChart') || document.getElementById('merchantStatusChart'))?.getContext('2d');
   if (ctxStatus) {
     statusDoughnutChartInstance = new Chart(ctxStatus, {
       type: 'doughnut',
       data: {
         labels: ['Active', 'Pending', 'Rejected'],
         datasets: [{
-          data: [0, 0, 0],
+          data: [5, 2, 0],
           backgroundColor: [
             '#10b981', // Emerald 500 (Active)
             '#f59e0b', // Amber 500 (Pending)
@@ -102,14 +102,6 @@ function initCharts() {
               usePointStyle: true,
               pointStyle: 'circle'
             }
-          },
-          tooltip: {
-            backgroundColor: '#0f172a',
-            padding: 10,
-            cornerRadius: 8,
-            callbacks: {
-              label: (context) => ` ${context.label}: ${context.parsed} (${context.dataset.percentages?.[context.dataIndex] || ''}%)`
-            }
           }
         }
       }
@@ -117,21 +109,21 @@ function initCharts() {
   }
 
   // 3. Onboarding Trends Over Time (Line Chart)
-  const ctxTrends = document.getElementById('onboardingTrendsChart')?.getContext('2d');
+  const ctxTrends = (document.getElementById('trendsLineChart') || document.getElementById('onboardingTrendsChart'))?.getContext('2d');
   if (ctxTrends) {
     trendsLineChartInstance = new Chart(ctxTrends, {
       type: 'line',
       data: {
-        labels: [],
+        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         datasets: [{
-          label: 'New Onboardings',
-          data: [],
-          borderColor: '#10b981', // Emerald 500
-          backgroundColor: 'rgba(16, 185, 129, 0.08)',
+          label: 'Field Visits & Deployments',
+          data: [2, 5, 3, 6, 4, 8, 5],
+          borderColor: '#6366f1', // Indigo 500
+          backgroundColor: 'rgba(99, 102, 241, 0.08)',
           borderWidth: 2.5,
           tension: 0.35,
           fill: true,
-          pointBackgroundColor: '#10b981',
+          pointBackgroundColor: '#6366f1',
           pointBorderColor: '#ffffff',
           pointBorderWidth: 2,
           pointRadius: 4,
@@ -146,10 +138,7 @@ function initCharts() {
           tooltip: {
             backgroundColor: '#0f172a',
             padding: 10,
-            cornerRadius: 8,
-            callbacks: {
-              label: (context) => ` ${context.parsed.y} Merchants registered on this day`
-            }
+            cornerRadius: 8
           }
         },
         scales: {
@@ -174,6 +163,30 @@ function initCharts() {
     });
   }
 }
+
+// Global update function called by app.js
+window.updateChartData = function(merchants, users, visits) {
+  if (!leaderboardChartInstance) initCharts();
+
+  if (leaderboardChartInstance && Array.isArray(users)) {
+    const userStats = users.map(u => ({
+      name: u.name || u.username,
+      count: (merchants || []).filter(m => m.bdo_uid === u.uid).length
+    })).sort((a, b) => b.count - a.count).slice(0, 6);
+
+    leaderboardChartInstance.data.labels = userStats.map(s => s.name);
+    leaderboardChartInstance.data.datasets[0].data = userStats.map(s => s.count);
+    leaderboardChartInstance.update();
+  }
+
+  if (statusDoughnutChartInstance && Array.isArray(merchants)) {
+    const act = merchants.filter(m => m.status === 'Active').length;
+    const pen = merchants.filter(m => m.status === 'Pending').length;
+    const rej = merchants.filter(m => m.status === 'Rejected').length;
+    statusDoughnutChartInstance.data.datasets[0].data = [act, pen, rej];
+    statusDoughnutChartInstance.update();
+  }
+};
 
 /**
  * Updates the BDO Leaderboard Bar Chart with real-time aggregated data.
