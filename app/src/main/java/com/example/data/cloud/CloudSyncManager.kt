@@ -177,52 +177,84 @@ object CloudSyncManager {
             }
         activeListeners.add(userListener)
 
-        // 2. Listen for MERCHANTS (Master Admin imports Excel -> instant sync to BDO devices)
-        val merchantListener = firestore.collection(COLLECTION_MERCHANTS)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.w(TAG, "Merchants listener error: ${error.message}")
-                    return@addSnapshotListener
+        // 2. Optimized Incremental Sync for MERCHANTS
+        // Drastically reduces Firestore reads by:
+        //  a) Checking local Room cache to determine if a full seed is already present
+        //  b) Using documentChanges diffing so only added/modified documents trigger DB updates
+        //  c) Utilizing updatedAt cutoff when local cache is primed to only query modified records
+        scope.launch {
+            try {
+                val localCount = db.merchantDao().countMerchants()
+                val maxUpdated = db.merchantDao().getMaxUpdatedAt() ?: 0L
+
+                // If local database has records, only listen for updates from the last sync minus safety buffer (1 hour)
+                val merchantQuery = if (localCount > 50 && maxUpdated > 0L) {
+                    val safetyCutoff = maxOf(0L, maxUpdated - 3600000L)
+                    firestore.collection(COLLECTION_MERCHANTS)
+                        .whereGreaterThanOrEqualTo("updatedAt", safetyCutoff)
+                } else {
+                    // Initial seed or empty local cache: query collection
+                    firestore.collection(COLLECTION_MERCHANTS)
                 }
-                if (snapshot != null && !snapshot.isEmpty) {
-                    scope.launch {
-                        for (doc in snapshot.documents) {
-                            try {
-                                val merchantId = doc.getString("merchantId") ?: continue
-                                val existing = db.merchantDao().findMerchantByMerchantId(merchantId)
-                                val merchant = MerchantEntity(
-                                    id = existing?.id ?: 0L,
-                                    merchantId = merchantId,
-                                    merchantName = doc.getString("merchantName") ?: "",
-                                    businessName = doc.getString("businessName") ?: "",
-                                    shopName = doc.getString("shopName") ?: "",
-                                    mobile = doc.getString("mobile") ?: "",
-                                    address = doc.getString("address") ?: "",
-                                    city = doc.getString("city") ?: "",
-                                    regionId = doc.getLong("regionId") ?: 1L,
-                                    bdoId = doc.getLong("bdoId") ?: 0L,
-                                    bdoName = doc.getString("bdoName") ?: "",
-                                    latitude = doc.getDouble("latitude") ?: 0.0,
-                                    longitude = doc.getDouble("longitude") ?: 0.0,
-                                    qrId = doc.getString("qrId") ?: "",
-                                    qrStatus = doc.getString("qrStatus") ?: "Not Deployed",
-                                    merchantStatus = doc.getString("merchantStatus") ?: "New",
-                                    merchantCategory = doc.getString("merchantCategory") ?: "General Store",
-                                    lastVisitDate = doc.getString("lastVisitDate") ?: ""
-                                )
-                                if (existing == null) {
-                                    db.merchantDao().insertMerchant(merchant)
-                                } else {
-                                    db.merchantDao().updateMerchant(merchant.copy(id = existing.id))
+
+                val merchantListener = merchantQuery.addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w(TAG, "Merchants listener error: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null && !snapshot.isEmpty) {
+                        scope.launch {
+                            // Process only document changes (ADDED / MODIFIED) rather than re-iterating entire collection
+                            val changedDocs = snapshot.documentChanges.mapNotNull { it.document }
+                            val docsToProcess = if (changedDocs.isNotEmpty()) changedDocs else snapshot.documents
+                            
+                            val merchantsToUpsert = mutableListOf<MerchantEntity>()
+                            for (doc in docsToProcess) {
+                                try {
+                                    val merchantId = doc.getString("merchantId") ?: continue
+                                    val existing = db.merchantDao().findMerchantByMerchantId(merchantId)
+                                    val docUpdatedAt = doc.getLong("updatedAt") ?: System.currentTimeMillis()
+                                    
+                                    val merchant = MerchantEntity(
+                                        id = existing?.id ?: 0L,
+                                        merchantId = merchantId,
+                                        merchantName = doc.getString("merchantName") ?: "",
+                                        businessName = doc.getString("businessName") ?: "",
+                                        shopName = doc.getString("shopName") ?: "",
+                                        mobile = doc.getString("mobile") ?: "",
+                                        address = doc.getString("address") ?: "",
+                                        city = doc.getString("city") ?: "",
+                                        regionId = doc.getLong("regionId") ?: 1L,
+                                        bdoId = doc.getLong("bdoId") ?: 0L,
+                                        bdoName = doc.getString("bdoName") ?: "",
+                                        latitude = doc.getDouble("latitude") ?: 0.0,
+                                        longitude = doc.getDouble("longitude") ?: 0.0,
+                                        qrId = doc.getString("qrId") ?: "",
+                                        qrStatus = doc.getString("qrStatus") ?: "Not Deployed",
+                                        merchantStatus = doc.getString("merchantStatus") ?: "New",
+                                        merchantCategory = doc.getString("merchantCategory") ?: "General Store",
+                                        lastVisitDate = doc.getString("lastVisitDate") ?: "",
+                                        updatedAt = docUpdatedAt
+                                    )
+                                    if (existing == null) {
+                                        db.merchantDao().insertMerchant(merchant)
+                                    } else {
+                                        db.merchantDao().updateMerchant(merchant.copy(id = existing.id))
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error syncing cloud merchant: ${e.message}")
                                 }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error syncing cloud merchant: ${e.message}")
                             }
                         }
                     }
                 }
+                synchronized(activeListeners) {
+                    activeListeners.add(merchantListener)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize optimized merchant listener: ${e.message}", e)
             }
-        activeListeners.add(merchantListener)
+        }
 
         // 3. Listen for VISITS (BDO logs visit -> instant sync to Admin & TL)
         val visitListener = firestore.collection(COLLECTION_VISITS)

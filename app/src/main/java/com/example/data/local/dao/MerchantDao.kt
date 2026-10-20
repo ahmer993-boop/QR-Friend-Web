@@ -44,6 +44,9 @@ interface MerchantDao {
     @Query("SELECT COUNT(*) FROM merchants")
     suspend fun countMerchants(): Int
 
+    @Query("SELECT MAX(updatedAt) FROM merchants")
+    suspend fun getMaxUpdatedAt(): Long?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMerchant(merchant: MerchantEntity): Long
 
