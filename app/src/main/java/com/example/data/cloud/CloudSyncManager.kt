@@ -12,7 +12,6 @@ import com.example.data.local.entity.MerchantEntity
 import com.example.data.local.entity.UserEntity
 import com.example.data.local.entity.VisitEntity
 import com.google.firebase.FirebaseApp
-import com.google.firebase.FirebaseOptions
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.PersistentCacheSettings
@@ -61,14 +60,10 @@ object CloudSyncManager {
         if (isInitialized) return
 
         try {
-            // 1. Ensure FirebaseApp is initialized safely
-            if (FirebaseApp.getApps(context).isEmpty()) {
-                val options = FirebaseOptions.Builder()
-                    .setApplicationId("com.aistudio.qrfriend")
-                    .setProjectId("qr-friend-c4eb1")
-                    .setApiKey("AIzaSyQrFriendFieldForceKey2026")
-                    .build()
-                FirebaseApp.initializeApp(context.applicationContext, options)
+            // 1. Ensure FirebaseApp is initialized automatically from google-services.json
+            val appContext = context.applicationContext
+            if (FirebaseApp.getApps(appContext).isEmpty()) {
+                FirebaseApp.initializeApp(appContext)
             }
 
             val firestore = FirebaseFirestore.getInstance()
@@ -83,7 +78,7 @@ object CloudSyncManager {
             isInitialized = true
 
             // 3. Monitor network connectivity
-            setupConnectivityMonitoring(context)
+            setupConnectivityMonitoring(appContext)
 
             // 4. Start Real-time Data Listeners across all devices
             setupRealtimeListeners(firestore, db)
@@ -93,7 +88,7 @@ object CloudSyncManager {
                 statusLabel = "Live Cloud Synced (Firestore)",
                 lastSyncTime = System.currentTimeMillis()
             )
-            Log.i(TAG, "CloudSyncManager initialized successfully with offline persistence.")
+            Log.i(TAG, "CloudSyncManager initialized successfully with offline persistence and automatic config.")
         } catch (e: Exception) {
             Log.e(TAG, "Initialization failed: ${e.message}", e)
             _networkStatus.value = CloudNetworkStatus(

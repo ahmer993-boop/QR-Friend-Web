@@ -1,3 +1,11 @@
+
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL SERVER ERROR]', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UNHANDLED REJECTION]', reason);
+});
+
 function isDemoAccount(record, userDoc) {
   if (!record && !userDoc) return false;
   if (record && (record.isDemo === true || record.is_demo === true || record.is_test === true)) return true;
